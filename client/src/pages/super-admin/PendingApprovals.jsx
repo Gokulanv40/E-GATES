@@ -166,7 +166,7 @@ export default function PendingApprovals() {
                             type="button"
                             onClick={() =>
                               setPreviewProof({
-                                url: `http://localhost:5000/${user.eb_bill_proof}`,
+                                url: `http://localhost:5002/${user.eb_bill_proof}`,
                                 title: `${user.name} - EB Bill Proof`,
                               })
                             }
@@ -184,7 +184,7 @@ export default function PendingApprovals() {
                             type="button"
                             onClick={() =>
                               setPreviewProof({
-                                url: `http://localhost:5000/${user.property_tax_receipt}`,
+                                url: `http://localhost:5002/${user.property_tax_receipt}`,
                                 title: `${user.name} - Property Tax Receipt`,
                               })
                             }

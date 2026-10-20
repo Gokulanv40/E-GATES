@@ -70,7 +70,7 @@ export default function AudioPlayer({ src, title = 'Voice Message' }) {
     if (str.startsWith('http://') || str.startsWith('https://')) {
       return str;
     }
-    const base = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/v1\/?$/, '');
+    const base = (import.meta.env.VITE_API_URL || 'http://localhost:5002').replace(/\/api\/v1\/?$/, '');
     return `${base}/${str.replace(/^\/?/, '')}`;
   })();
 

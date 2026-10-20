@@ -78,7 +78,7 @@ export default function MemberDashboard() {
       clean = clean.substring(idx);
     }
     if (clean.startsWith('http://') || clean.startsWith('https://')) return clean;
-    const base = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/v1\/?$/, '');
+    const base = (import.meta.env.VITE_API_URL || 'http://localhost:5002').replace(/\/api\/v1\/?$/, '');
     return `${base}/${clean.replace(/^\/?/, '')}`;
   };
 
@@ -397,7 +397,7 @@ export default function MemberDashboard() {
                         src={
                           news.voice_message.startsWith('http')
                             ? news.voice_message
-                            : `${import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'http://localhost:5000'}/${news.voice_message.replace(/\\/g, '/').replace(/^\/?/, '')}`
+                            : `${import.meta.env.VITE_API_URL?.replace('/api/v1', '') || 'http://localhost:5002'}/${news.voice_message.replace(/\\/g, '/').replace(/^\/?/, '')}`
                         }
                         title="Voice Note"
                       />

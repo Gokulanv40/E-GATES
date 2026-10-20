@@ -51,7 +51,7 @@ export default function AdminComplaints() {
   const resolveFileUrl = (filePath) => {
     if (!filePath) return '';
     if (filePath.startsWith('http://') || filePath.startsWith('https://')) return filePath;
-    const base = (import.meta.env.VITE_API_URL || 'http://localhost:5000').replace(/\/api\/v1\/?$/, '');
+    const base = (import.meta.env.VITE_API_URL || 'http://localhost:5002').replace(/\/api\/v1\/?$/, '');
     return `${base}/${filePath.replace(/\\/g, '/').replace(/^\/?/, '')}`;
   };
 

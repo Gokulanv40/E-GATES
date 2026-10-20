@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 
 export const SocketContext = createContext(null);
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5002';
 
 export const SocketProvider = ({ children }) => {
   const { token, isAuthenticated, user } = useAuth();

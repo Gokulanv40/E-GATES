@@ -372,7 +372,7 @@ export default function Associations() {
                   <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-primary-50 to-blue-100 text-primary-700 flex items-center justify-center font-bold text-lg border border-primary-100 flex-shrink-0 overflow-hidden">
                     {assoc.logo ? (
                       <img
-                        src={`http://localhost:5000/${assoc.logo}`}
+                        src={`http://localhost:5002/${assoc.logo}`}
                         alt={assoc.name}
                         className="w-full h-full object-cover"
                         onError={(e) => {
