@@ -12,6 +12,13 @@ const { initSocket } = require('./services/socket.service');
 const { initCronJobs } = require('./services/cron.service');
 const apiRoutes = require('./routes');
 
+process.on('uncaughtException', (err) => {
+  console.error('[Uncaught Exception]:', err);
+});
+process.on('unhandledRejection', (reason, promise) => {
+  console.error('[Unhandled Rejection]:', reason);
+});
+
 const app = express();
 
 // Security HTTP headers
