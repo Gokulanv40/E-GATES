@@ -424,40 +424,48 @@ export default function Login() {
               </button>
             </form>
 
-            {/* Registration Callout for Resident Members */}
-            <div className="mt-6 pt-5 border-t border-gray-100 text-center">
-              {activeTab === 'member' ? (
-                <div className="bg-emerald-50/60 p-4 rounded-2xl border border-emerald-100">
-                  <p className="text-xs text-gray-600 mb-2">
-                    Are you a new house owner or resident in this layout?
-                  </p>
-                  <Link
-                    to="/register"
-                    className="inline-flex items-center gap-1.5 px-4 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-sm transition"
-                  >
-                    <span>Register as New Member</span>
-                    <HiArrowRight className="w-3.5 h-3.5" />
-                  </Link>
-                </div>
-              ) : (
-                <p className="text-xs text-gray-500">
-                  Resident member?{' '}
-                  <button
-                    type="button"
-                    onClick={() => handleTabChange('member')}
-                    className="font-bold text-primary-600 hover:underline"
-                  >
-                    Switch to User / Member Tab
-                  </button>{' '}
-                  or{' '}
-                  <Link
-                    to="/register"
-                    className="font-bold text-primary-600 hover:underline"
-                  >
-                    Register Here
-                  </Link>
-                </p>
-              )}
+            {/* Separate Registration Forms Gateway */}
+            <div className="mt-6 pt-5 border-t border-gray-100">
+              <p className="text-xs font-bold text-gray-500 uppercase tracking-wider text-center mb-3">
+                Need to register? Select a Registration Form:
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <Link
+                  to="/register?type=assoc-admin"
+                  className="flex flex-col items-center justify-center p-3 rounded-xl border border-purple-200 bg-purple-50/70 hover:bg-purple-100/90 hover:border-purple-300 transition text-center group shadow-sm"
+                >
+                  <span className="text-xs font-bold text-purple-800 flex items-center gap-1">
+                    🏛️ Admin + Association
+                  </span>
+                  <span className="text-[11px] text-purple-600 font-medium mt-0.5">
+                    Main Admin & Layout
+                  </span>
+                </Link>
+
+                <Link
+                  to="/register?type=admin"
+                  className="flex flex-col items-center justify-center p-3 rounded-xl border border-blue-200 bg-blue-50/70 hover:bg-blue-100/90 hover:border-blue-300 transition text-center group shadow-sm"
+                >
+                  <span className="text-xs font-bold text-blue-800 flex items-center gap-1">
+                    🛡️ Admin
+                  </span>
+                  <span className="text-[11px] text-blue-600 font-medium mt-0.5">
+                    Registration Form
+                  </span>
+                </Link>
+
+                <Link
+                  to="/register?type=member"
+                  className="flex flex-col items-center justify-center p-3 rounded-xl border border-emerald-200 bg-emerald-50/70 hover:bg-emerald-100/90 hover:border-emerald-300 transition text-center group shadow-sm"
+                >
+                  <span className="text-xs font-bold text-emerald-800 flex items-center gap-1">
+                    👥 Member
+                  </span>
+                  <span className="text-[11px] text-emerald-600 font-medium mt-0.5">
+                    Registration Form
+                  </span>
+                </Link>
+              </div>
             </div>
           </div>
         </div>

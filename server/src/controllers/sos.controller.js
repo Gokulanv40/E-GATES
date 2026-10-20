@@ -33,16 +33,61 @@ const sosController = {
       }
 
       const {
-        emergency_type = 'Other',
+        emergency_type = 'Other Emergency',
         latitude,
         longitude,
         is_test = false,
         notes
       } = req.body;
 
-      // Validate emergency type
-      const allowedTypes = ['Medical', 'Fire', 'Theft/Intruder', 'Women Safety', 'Other'];
-      const validEmergencyType = allowedTypes.includes(emergency_type) ? emergency_type : 'Other';
+      // Map type to clean standardized name
+      const typeMapping = {
+        'Medical': 'Medical Emergency',
+        'Medical Emergency': 'Medical Emergency',
+        'Fire': 'Fire Outbreak',
+        'Fire Incident': 'Fire Outbreak',
+        'Fire Outbreak': 'Fire Outbreak',
+        'Theft/Intruder': 'Theft / Intruder',
+        'Theft / Intruder': 'Theft / Intruder',
+        'Women Safety': 'Women Safety',
+        'Immediate Distress': 'Immediate Emergency Distress',
+        'Immediate Emergency Distress': 'Immediate Emergency Distress',
+        'Other': 'Other Emergency',
+        'Other Emergency': 'Other Emergency',
+        'General Emergency': 'Other Emergency',
+      };
+      const validEmergencyType = typeMapping[emergency_type] || emergency_type || 'Other Emergency';
+
+      // Fetch user profile info with full address
+      const userRes = await pool.query(
+        'SELECT id, name, phone, email, member_code, door_no, street, layout_name, taluk, district, state FROM users WHERE id = $1',
+        [userId]
+      );
+      const userProfile = userRes.rows[0] || {};
+
+      // Fetch association details
+      const assocRes = await pool.query(
+        'SELECT id, name, city, address FROM associations WHERE id = $1',
+        [associationId]
+      );
+      const assoc = assocRes.rows[0] || {};
+      const assocName = assoc.name || 'Layout Association';
+
+      // Assemble full resident address
+      const addrList = [];
+      if (userProfile.door_no) addrList.push(`Door/Flat: ${userProfile.door_no}`);
+      if (userProfile.street) addrList.push(`Street: ${userProfile.street}`);
+      if (userProfile.layout_name) addrList.push(`Layout: ${userProfile.layout_name}`);
+      if (userProfile.taluk) addrList.push(`Taluk: ${userProfile.taluk}`);
+      if (userProfile.district) addrList.push(`District: ${userProfile.district}`);
+      if (userProfile.state) addrList.push(`State: ${userProfile.state}`);
+      const residentAddress = addrList.length > 0 ? addrList.join(', ') : 'Registered Association Residence';
+
+      const fullAssocInfo = [assoc.name, assoc.address, assoc.city].filter(Boolean).join(', ');
+
+      const alertNotes = notes
+        ? notes.trim()
+        : `Problem: ${validEmergencyType} | Address: ${residentAddress}`;
 
       // Insert SOS alert record
       const alertInsertQuery = `
@@ -59,21 +104,10 @@ const sosController = {
         latitude ? parseFloat(latitude) : null,
         longitude ? parseFloat(longitude) : null,
         Boolean(is_test),
-        notes ? notes.trim() : null
+        alertNotes
       ]);
 
       const alert = alertResult.rows[0];
-
-      // Fetch user profile info
-      const userRes = await pool.query(
-        'SELECT id, name, phone, door_no, street, layout_name FROM users WHERE id = $1',
-        [userId]
-      );
-      const userProfile = userRes.rows[0] || {};
-
-      // Fetch association name
-      const assocRes = await pool.query('SELECT name FROM associations WHERE id = $1', [associationId]);
-      const assocName = assocRes.rows[0]?.name || 'Layout Association';
 
       // Fetch SOS Contacts for this association
       const contactsRes = await pool.query(
@@ -86,18 +120,46 @@ const sosController = {
         ? `https://maps.google.com/?q=${latitude},${longitude}`
         : 'Location unavailable';
 
+      // Formulate detailed, clear SMS message with Problem and Full Address
+      const testPrefix = is_test ? '[TEST ALERT - PLEASE IGNORE]\n' : '🚨 EMERGENCY SOS ALERT!\n';
+      const smsBody = [
+        `${testPrefix}PROBLEM: ${validEmergencyType}`,
+        `RESIDENT: ${userProfile.name} (Phone: ${userProfile.phone || 'N/A'}${userProfile.member_code ? `, Member Code: ${userProfile.member_code}` : ''})`,
+        `RESIDENT ADDRESS: ${residentAddress}`,
+        `ASSOCIATION: ${fullAssocInfo}`,
+        `LIVE LOCATION: ${locationLink}`,
+        `TIME: ${new Date().toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })}`,
+        `Please respond and dispatch emergency assistance immediately!`
+      ].join('\n');
+
       const alertPayload = {
         ...alert,
+        problem: validEmergencyType,
+        resident_address: residentAddress,
+        association_address: fullAssocInfo,
         user: {
           id: userProfile.id,
           name: userProfile.name,
           phone: userProfile.phone,
+          member_code: userProfile.member_code,
           door_no: userProfile.door_no,
           street: userProfile.street,
-          layout_name: userProfile.layout_name
+          layout_name: userProfile.layout_name,
+          taluk: userProfile.taluk,
+          district: userProfile.district,
+          state: userProfile.state,
+          full_address: residentAddress
         },
         association_name: assocName,
-        location_link: locationLink
+        location_link: locationLink,
+        contacts: contacts.map((c) => ({
+          id: c.id,
+          name: c.name,
+          phone: c.phone,
+          contact_type: c.contact_type,
+          designation: c.designation
+        })),
+        sms_body: smsBody
       };
 
       // Emit socket event
@@ -112,9 +174,6 @@ const sosController = {
       }
 
       // Dispatch SMS to contacts
-      const testPrefix = is_test ? '[TEST ALERT - PLEASE IGNORE] ' : 'EMERGENCY ALERT: ';
-      const smsBody = `${testPrefix}${validEmergencyType} from ${userProfile.name} (Door: ${userProfile.door_no || 'N/A'}, Phone: ${userProfile.phone}) at ${assocName}. Location: ${locationLink}`;
-
       for (const contact of contacts) {
         // If this is a test alert, skip alerting the police contact
         if (is_test && contact.contact_type === 'police') {
@@ -137,7 +196,7 @@ const sosController = {
                VALUES ($1, $2, $3, $4, $5)`,
               [
                 contact.user_id,
-                `${is_test ? '[TEST] ' : ''}SOS: ${validEmergencyType}`,
+                `${is_test ? '[TEST] ' : ''}🚨 SOS: ${validEmergencyType} from ${userProfile.name}`,
                 smsBody,
                 'error',
                 `/admin/sos-alerts`
@@ -155,7 +214,7 @@ const sosController = {
         'SOS_TRIGGER',
         'sos_alerts',
         alert.id,
-        { emergency_type: validEmergencyType, is_test: Boolean(is_test), latitude, longitude },
+        { emergency_type: validEmergencyType, is_test: Boolean(is_test), latitude, longitude, residentAddress },
         req.ip
       );
 
@@ -425,6 +484,7 @@ const sosController = {
                u.name as user_name, u.phone as user_phone, u.email as user_email,
                u.member_code as user_member_code, u.door_no as user_door_no,
                u.street as user_street, u.layout_name as user_layout_name,
+               u.taluk as user_taluk, u.district as user_district, u.state as user_state,
                ack.name as acknowledged_by_name,
                a.name as association_name
         FROM sos_alerts s

@@ -94,8 +94,23 @@ export default function Header({ onMenuToggle, associationName }) {
       ? 'Master Super Admin Portal'
       : 'Layout Resident Association');
 
+  const resolveFileUrl = (filePath) => {
+    if (!filePath) return '';
+    if (filePath.startsWith('http://') || filePath.startsWith('https://')) return filePath;
+    const base = (import.meta.env.VITE_API_URL || 'http://localhost:5002').replace(/\/api\/v1\/?$/, '');
+    const normalized = filePath.replace(/\\/g, '/');
+    const uploadIndex = normalized.indexOf('/uploads/');
+    if (uploadIndex !== -1) {
+      return `${base}${normalized.substring(uploadIndex)}`;
+    }
+    if (normalized.startsWith('uploads/')) {
+      return `${base}/${normalized}`;
+    }
+    return `${base}/${normalized.replace(/^\/?/, '')}`;
+  };
+
   const getProfilePath = () => {
-    if (user?.role === 'super_admin') return '/super-admin/dashboard';
+    if (user?.role === 'super_admin') return '/super-admin/profile';
     if (user?.role === 'admin') return '/admin/profile';
     return '/member/profile';
   };
@@ -206,15 +221,28 @@ export default function Header({ onMenuToggle, associationName }) {
             onClick={() => setUserMenuOpen(!userMenuOpen)}
             className="flex items-center gap-2 p-1.5 rounded-xl hover:bg-gray-100 dark:hover:bg-slate-800 transition focus:outline-none"
           >
-            <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 flex items-center justify-center font-bold text-xs ring-2 ring-primary-500/20">
-              {user?.name ? user.name.slice(0, 2).toUpperCase() : 'U'}
+            <div className="w-8 h-8 rounded-full overflow-hidden bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 flex items-center justify-center font-bold text-xs ring-2 ring-primary-500/20 flex-shrink-0">
+              {user?.profile_photo ? (
+                <img
+                  src={resolveFileUrl(user.profile_photo)}
+                  alt={user?.name || 'User'}
+                  className="w-full h-full object-cover"
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              ) : (
+                user?.name ? user.name.slice(0, 2).toUpperCase() : 'U'
+              )}
             </div>
             <div className="hidden md:flex flex-col text-left">
               <span className="text-xs font-semibold text-gray-800 dark:text-gray-200 leading-tight truncate max-w-[100px]">
                 {user?.name || 'User'}
               </span>
               <span className="text-[10px] text-gray-400 capitalize">
-                {user?.role?.replace('_', ' ') || 'Resident'}
+                {user?.is_main_admin
+                  ? 'Main Association Admin'
+                  : (user?.role === 'admin'
+                    ? 'Layout Admin'
+                    : (user?.role?.replace('_', ' ') || 'Resident'))}
               </span>
             </div>
             <HiChevronDown className="w-3.5 h-3.5 text-gray-400 hidden sm:block" />
@@ -222,13 +250,35 @@ export default function Header({ onMenuToggle, associationName }) {
 
           {/* User Dropdown */}
           {userMenuOpen && (
-            <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-gray-200 dark:border-slate-800 py-1.5 z-50">
-              <div className="px-4 py-2 border-b border-gray-100 dark:border-slate-800">
-                <p className="text-xs font-bold text-gray-900 dark:text-gray-100 truncate">{user?.name}</p>
-                <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">{user?.email || user?.phone}</p>
-                <div className="mt-1.5 flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
+            <div className="absolute right-0 mt-2 w-60 bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-gray-200 dark:border-slate-800 py-1.5 z-50">
+              <div className="px-4 py-2.5 border-b border-gray-100 dark:border-slate-800">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-9 h-9 rounded-full overflow-hidden bg-primary-100 dark:bg-primary-900/40 text-primary-700 dark:text-primary-300 flex items-center justify-center font-bold text-xs ring-2 ring-primary-500/20 flex-shrink-0">
+                    {user?.profile_photo ? (
+                      <img
+                        src={resolveFileUrl(user.profile_photo)}
+                        alt={user?.name || 'User'}
+                        className="w-full h-full object-cover"
+                        onError={(e) => { e.target.style.display = 'none'; }}
+                      />
+                    ) : (
+                      user?.name ? user.name.slice(0, 2).toUpperCase() : 'U'
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-xs font-bold text-gray-900 dark:text-gray-100 truncate">{user?.name}</p>
+                    <p className="text-[11px] text-gray-500 dark:text-gray-400 truncate">{user?.email || user?.phone}</p>
+                  </div>
+                </div>
+                <div className="mt-2 flex items-center gap-1 text-[10px] font-semibold text-emerald-600 dark:text-emerald-400">
                   <HiCheckBadge className="w-3.5 h-3.5" />
-                  <span className="capitalize">{user?.role?.replace('_', ' ')}</span>
+                  <span className="capitalize">
+                    {user?.is_main_admin
+                      ? 'Main Association Admin'
+                      : (user?.role === 'admin'
+                        ? 'Layout Admin'
+                        : (user?.role?.replace('_', ' ')))}
+                  </span>
                   {user?.member_code && (
                     <span className="text-gray-400 font-mono">#{user.member_code}</span>
                   )}

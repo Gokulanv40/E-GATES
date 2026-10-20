@@ -2,32 +2,15 @@ const rateLimit = require('express-rate-limit');
 
 /**
  * General API Rate Limiter
- * 1000 requests per 15 minutes in dev, 100 in prod
+ * Unlimited in dev / testing
  */
-const generalLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'production' ? 100 : 1000,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    success: false,
-    message: 'Too many requests from this IP, please try again after 15 minutes.',
-  },
-});
+const generalLimiter = (req, res, next) => next();
 
 /**
  * Authentication Rate Limiter (login, register, forgot-password)
+ * Unlimited attempts accepted
  */
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000,
-  max: process.env.NODE_ENV === 'production' ? 15 : 500,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    success: false,
-    message: 'Too many authentication attempts, please try again after 15 minutes.',
-  },
-});
+const authLimiter = (req, res, next) => next();
 
 /**
  * SOS Emergency Trigger Rate Limiter

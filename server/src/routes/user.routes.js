@@ -12,7 +12,9 @@ const proofUploadMiddleware = (req, res, next) => {
   if (upload && upload.proofUpload && typeof upload.proofUpload.fields === 'function') {
     upload.proofUpload.fields([
       { name: 'eb_bill_proof', maxCount: 1 },
-      { name: 'property_tax_receipt', maxCount: 1 }
+      { name: 'property_tax_receipt', maxCount: 1 },
+      { name: 'profile_photo', maxCount: 1 },
+      { name: 'avatar', maxCount: 1 }
     ])(req, res, (err) => {
       if (err) {
         return res.status(400).json({
@@ -43,6 +45,46 @@ router.post(
     validate
   ],
   userController.createSuperAdmin
+);
+
+/**
+ * @route   POST /api/v1/users/create-admin
+ * @desc    Create an association admin
+ * @access  Private (Super Admin, Main Association Admin)
+ */
+router.post(
+  '/create-admin',
+  authenticate,
+  authorize('super_admin', 'admin'),
+  proofUploadMiddleware,
+  [
+    body('name').trim().notEmpty().withMessage('Name is required'),
+    body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+    body('association_id').optional().isInt().withMessage('Valid association ID is required'),
+    validate
+  ],
+  userController.createAdmin
+);
+
+/**
+ * @route   POST /api/v1/users/create-member
+ * @desc    Create a resident member manually
+ * @access  Private (Super Admin, Main Association Admin)
+ */
+router.post(
+  '/create-member',
+  authenticate,
+  authorize('super_admin', 'admin'),
+  proofUploadMiddleware,
+  [
+    body('name').trim().notEmpty().withMessage('Name is required'),
+    body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+    body('association_id').optional().isInt().withMessage('Valid association ID is required'),
+    validate
+  ],
+  userController.createMember
 );
 
 /**

@@ -145,34 +145,47 @@ const authController = {
         req.ip
       );
 
-      // Notify association admin if registered to an association
+      // Notify Main Association Admin for approval
       if (newUser.association_id) {
         try {
-          const admins = await pool.query(
-            "SELECT id, email, phone FROM users WHERE association_id = $1 AND role = 'admin' AND status = 'approved'",
+          let targetAdmins = await pool.query(
+            "SELECT id, name, email, phone FROM users WHERE association_id = $1 AND role = 'admin' AND is_main_admin = true AND status = 'approved'",
             [newUser.association_id]
           );
-          for (const admin of admins.rows) {
+          if (targetAdmins.rows.length === 0) {
+            targetAdmins = await pool.query(
+              "SELECT id, name, email, phone FROM users WHERE association_id = $1 AND role = 'admin' AND status = 'approved'",
+              [newUser.association_id]
+            );
+          }
+
+          const notifTitle = newUser.role === 'admin'
+            ? 'New Layout Admin Pending Your Approval'
+            : 'New Resident Member Pending Your Approval';
+
+          const notifMsg = newUser.role === 'admin'
+            ? `${newUser.name} has registered as an Administrator for your layout and requires your approval as Main Association Admin.`
+            : `${newUser.name} has registered for door ${newUser.door_no || 'N/A'} and requires your approval as Main Association Admin.`;
+
+          for (const admin of targetAdmins.rows) {
             await pool.query(
               `INSERT INTO notifications (user_id, title, message, type, link)
                VALUES ($1, $2, $3, $4, $5)`,
-              [
-                admin.id,
-                'New Member Registration',
-                `${newUser.name} has registered for door ${newUser.door_no || 'N/A'} and is awaiting approval.`,
-                'info',
-                '/admin/members'
-              ]
+              [admin.id, notifTitle, notifMsg, 'info', '/admin/approvals']
             );
           }
         } catch (notifErr) {
-          console.error('Failed to send registration notification to admin:', notifErr.message);
+          console.error('Failed to send registration notification to Main Admin:', notifErr.message);
         }
       }
 
+      const responseMessage = newUser.role === 'admin'
+        ? 'Registration submitted successfully! Your administrator registration is pending approval by the Main Association Admin.'
+        : 'Registration submitted successfully! Your resident membership registration is pending approval by the Main Association Admin.';
+
       res.status(201).json({
         success: true,
-        message: 'Registration submitted successfully. Your account is pending administrator approval.',
+        message: responseMessage,
         data: {
           id: newUser.id,
           name: newUser.name,
@@ -185,6 +198,179 @@ const authController = {
       });
     } catch (error) {
       next(error);
+    }
+  },
+
+  /**
+   * Register a new Association + Admin together
+   * Public combined registration
+   */
+  async registerAssociationAndAdmin(req, res, next) {
+    const client = await pool.connect();
+    try {
+      const {
+        association_name,
+        association_city,
+        association_address,
+        name,
+        email,
+        phone,
+        password,
+        door_no,
+        street,
+        taluk,
+        district,
+        state = 'Tamil Nadu',
+        language = 'en'
+      } = req.body;
+
+      if (!association_name || !association_city) {
+        return res.status(400).json({
+          success: false,
+          message: 'Association name and city/district are required'
+        });
+      }
+
+      if (!name || !email || !phone || !password) {
+        return res.status(400).json({
+          success: false,
+          message: 'Administrator name, email, phone, and password are required'
+        });
+      }
+
+      // Check for duplicate email or phone in users
+      const duplicateUser = await client.query(
+        'SELECT id, email, phone FROM users WHERE email = $1 OR phone = $2',
+        [email.trim().toLowerCase(), phone.trim()]
+      );
+
+      if (duplicateUser.rows.length > 0) {
+        const existing = duplicateUser.rows[0];
+        const field = existing.email.toLowerCase() === email.trim().toLowerCase() ? 'Email' : 'Phone number';
+        return res.status(409).json({
+          success: false,
+          message: `${field} is already registered`
+        });
+      }
+
+      // Check for duplicate association name in same city
+      const duplicateAssoc = await client.query(
+        'SELECT id, name FROM associations WHERE LOWER(name) = LOWER($1) AND LOWER(city) = LOWER($2)',
+        [association_name.trim(), association_city.trim()]
+      );
+
+      if (duplicateAssoc.rows.length > 0) {
+        return res.status(409).json({
+          success: false,
+          message: `An association with name "${association_name}" already exists in ${association_city}`
+        });
+      }
+
+      // Handle files
+      const logo = req.files && req.files.logo && req.files.logo[0]
+        ? req.files.logo[0].path.replace(/\\/g, '/')
+        : null;
+
+      const ebBillProof = req.files && req.files.eb_bill_proof && req.files.eb_bill_proof[0]
+        ? req.files.eb_bill_proof[0].path.replace(/\\/g, '/')
+        : null;
+
+      const propertyTaxReceipt = req.files && req.files.property_tax_receipt && req.files.property_tax_receipt[0]
+        ? req.files.property_tax_receipt[0].path.replace(/\\/g, '/')
+        : null;
+
+      await client.query('BEGIN');
+
+      // 1. Insert new association (inactive pending Super Admin approval)
+      const assocRes = await client.query(
+        `INSERT INTO associations (name, city, address, logo, is_active)
+         VALUES ($1, $2, $3, $4, false)
+         RETURNING *`,
+        [association_name.trim(), association_city.trim(), association_address ? association_address.trim() : null, logo]
+      );
+      const newAssoc = assocRes.rows[0];
+
+      // 2. Hash password
+      const passwordHash = await bcrypt.hash(password, 12);
+
+      // 3. Insert admin user with is_main_admin = true (pending Super Admin approval)
+      const insertUserQuery = `
+        INSERT INTO users (
+          name, email, phone, password_hash, role, is_main_admin, association_id,
+          door_no, street, layout_name, taluk, district, state,
+          eb_bill_proof, property_tax_receipt, status, language
+        ) VALUES (
+          $1, $2, $3, $4, 'admin', true, $5,
+          $6, $7, $8, $9, $10, $11,
+          $12, $13, 'pending', $14
+        ) RETURNING id, name, email, phone, role, is_main_admin, association_id, status, created_at
+      `;
+      const userRes = await client.query(insertUserQuery, [
+        name.trim(),
+        email.trim().toLowerCase(),
+        phone.trim(),
+        passwordHash,
+        newAssoc.id,
+        door_no ? door_no.trim() : null,
+        street ? street.trim() : null,
+        association_name.trim(),
+        taluk ? taluk.trim() : null,
+        district ? district.trim() : association_city.trim(),
+        state ? state.trim() : 'Tamil Nadu',
+        ebBillProof,
+        propertyTaxReceipt,
+        language
+      ]);
+      const newAdmin = userRes.rows[0];
+
+      // Link newly created Main Admin as association's primary main_admin_id
+      await client.query('UPDATE associations SET main_admin_id = $1 WHERE id = $2', [newAdmin.id, newAssoc.id]);
+
+      // 4. Send notification to all Super Admins
+      try {
+        const superAdmins = await client.query("SELECT id FROM users WHERE role = 'super_admin'");
+        for (const sa of superAdmins.rows) {
+          await client.query(
+            `INSERT INTO notifications (user_id, title, message, type, link)
+             VALUES ($1, $2, $3, $4, $5)`,
+            [
+              sa.id,
+              'New Association & Main Admin Pending Approval',
+              `New layout "${newAssoc.name}" and Main Association Admin "${newAdmin.name}" have registered and require review.`,
+              'info',
+              '/super-admin/approvals'
+            ]
+          );
+        }
+      } catch (notifErr) {
+        console.warn('Super admin notification error:', notifErr.message);
+      }
+
+      await client.query('COMMIT');
+
+      // Audit logs
+      await logAudit(
+        newAdmin.id,
+        'ASSOCIATION_REGISTER',
+        'associations',
+        newAssoc.id,
+        { name: newAssoc.name, city: newAssoc.city, admin_id: newAdmin.id, designation: 'Main Association Admin', status: 'pending' },
+        req.ip
+      );
+
+      res.status(201).json({
+        success: true,
+        message: 'Registration submitted successfully! Your application for the new association and Main Association Admin account is pending Super Administrator approval. You will be able to log in once approved by the Super Administrator.',
+        data: {
+          association: newAssoc,
+          admin: newAdmin
+        }
+      });
+    } catch (err) {
+      await client.query('ROLLBACK');
+      next(err);
+    } finally {
+      client.release();
     }
   },
 
@@ -223,9 +409,14 @@ const authController = {
 
       // Check account approval status
       if (user.status === 'pending') {
+        const pendingMsg = user.is_main_admin
+          ? 'Your association and Main Association Admin registration is pending approval by the Super Administrator. You will be able to log in once approved.'
+          : (user.role === 'admin'
+            ? 'Your administrator registration is pending approval by the Main Association Admin. You will be able to log in once approved.'
+            : 'Your resident registration is pending approval by the Main Association Admin. You will be able to log in once approved.');
         return res.status(403).json({
           success: false,
-          message: 'Account pending approval. Please wait for an administrator to review your registration.'
+          message: pendingMsg
         });
       }
 
@@ -250,7 +441,7 @@ const authController = {
       if (user.role !== 'super_admin' && user.association_id && user.association_active === false) {
         return res.status(403).json({
           success: false,
-          message: 'Your association account has been deactivated. Please contact support.'
+          message: 'Your association registration is awaiting activation by the Super Administrator.'
         });
       }
 
@@ -263,10 +454,21 @@ const authController = {
         });
       }
 
+      // Determine designation
+      const userDesignation = user.is_main_admin
+        ? 'Main Association Admin'
+        : user.role === 'admin'
+        ? 'Layout Admin'
+        : user.role === 'super_admin'
+        ? 'Super Admin'
+        : 'Resident Member';
+
       // Generate Access Token (15m)
       const tokenPayload = {
         id: user.id,
         role: user.role,
+        is_main_admin: Boolean(user.is_main_admin),
+        designation: userDesignation,
         association_id: user.association_id,
         name: user.name,
         email: user.email,
@@ -307,6 +509,8 @@ const authController = {
             email: user.email,
             phone: user.phone,
             role: user.role,
+            is_main_admin: Boolean(user.is_main_admin),
+            designation: userDesignation,
             association_id: user.association_id,
             association_name: user.association_name,
             member_code: user.member_code,
@@ -318,6 +522,7 @@ const authController = {
             state: user.state,
             eb_bill_proof: user.eb_bill_proof,
             property_tax_receipt: user.property_tax_receipt,
+            profile_photo: user.profile_photo,
             status: user.status,
             language: user.language,
             created_at: user.created_at
@@ -345,7 +550,7 @@ const authController = {
 
       // Check DB for matching valid token
       const tokenQuery = `
-        SELECT rt.*, u.id as user_id, u.name, u.email, u.role, u.association_id, u.member_code, u.status
+        SELECT rt.*, u.id as user_id, u.name, u.email, u.role, u.is_main_admin, u.association_id, u.member_code, u.status
         FROM refresh_tokens rt
         JOIN users u ON rt.user_id = u.id
         WHERE rt.token = $1 AND rt.expires_at > NOW()
@@ -368,11 +573,21 @@ const authController = {
         });
       }
 
+      const userDesignation = user.is_main_admin
+        ? 'Main Association Admin'
+        : user.role === 'admin'
+        ? 'Layout Admin'
+        : user.role === 'super_admin'
+        ? 'Super Admin'
+        : 'Resident Member';
+
       // Generate new access token
       const newAccessToken = jwt.sign(
         {
           id: user.user_id,
           role: user.role,
+          is_main_admin: Boolean(user.is_main_admin),
+          designation: userDesignation,
           association_id: user.association_id,
           name: user.name,
           email: user.email,

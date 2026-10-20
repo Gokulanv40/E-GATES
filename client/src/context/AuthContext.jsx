@@ -138,6 +138,26 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
+  const registerAssociationAdmin = async (formData) => {
+    try {
+      setLoading(true);
+      const response = await api.post('/auth/register-association-admin', formData);
+      const msg = response.data?.message || 'Association and Administrator registered successfully!';
+      toast.success(msg);
+      return response.data;
+    } catch (error) {
+      const errMsg =
+        error.response?.data?.message ||
+        error.response?.data?.error ||
+        error.message ||
+        'Association registration failed.';
+      toast.error(errMsg);
+      throw error;
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const logout = useCallback(async () => {
     const refreshToken = localStorage.getItem('association_refresh_token');
     try {
@@ -171,6 +191,7 @@ export const AuthProvider = ({ children }) => {
     isAuthenticated: Boolean(token && user),
     login,
     register,
+    registerAssociationAdmin,
     logout,
     updateUser,
   };

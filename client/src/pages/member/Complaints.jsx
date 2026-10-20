@@ -30,6 +30,7 @@ export default function MemberComplaints() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDetailModalOpen, setIsDetailModalOpen] = useState(false);
   const [isDeleteConfirmOpen, setIsDeleteConfirmOpen] = useState(false);
+  const [previewProof, setPreviewProof] = useState(null); // { url, title }
 
   const [selectedComplaint, setSelectedComplaint] = useState(null);
   const [complaintToDelete, setComplaintToDelete] = useState(null);
@@ -67,7 +68,15 @@ export default function MemberComplaints() {
     if (!filePath) return '';
     if (filePath.startsWith('http://') || filePath.startsWith('https://')) return filePath;
     const base = (import.meta.env.VITE_API_URL || 'http://localhost:5002').replace(/\/api\/v1\/?$/, '');
-    return `${base}/${filePath.replace(/\\/g, '/').replace(/^\/?/, '')}`;
+    const normalized = filePath.replace(/\\/g, '/');
+    const uploadIndex = normalized.indexOf('/uploads/');
+    if (uploadIndex !== -1) {
+      return `${base}${normalized.substring(uploadIndex)}`;
+    }
+    if (normalized.startsWith('uploads/')) {
+      return `${base}/${normalized}`;
+    }
+    return `${base}/${normalized.replace(/^\/?/, '')}`;
   };
 
   // Open Create
@@ -320,15 +329,19 @@ export default function MemberComplaints() {
 
                   {comp.attachment && (
                     <div className="pt-1">
-                      <a
-                        href={resolveFileUrl(comp.attachment)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 text-xs text-primary-600 hover:underline font-semibold"
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setPreviewProof({
+                            url: resolveFileUrl(comp.attachment),
+                            title: `Ticket #${comp.id} - ${comp.title} Proof`,
+                          })
+                        }
+                        className="inline-flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700 hover:underline font-semibold bg-primary-50/70 hover:bg-primary-100/70 px-2.5 py-1 rounded-lg border border-primary-200/60 transition"
                       >
                         <HiPaperClip className="w-3.5 h-3.5" />
                         <span>View Attachment Proof</span>
-                      </a>
+                      </button>
                     </div>
                   )}
 
@@ -628,16 +641,50 @@ export default function MemberComplaints() {
             </div>
 
             {selectedComplaint.attachment && (
-              <div>
-                <a
-                  href={resolveFileUrl(selectedComplaint.attachment)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-xs text-primary-600 hover:underline font-semibold"
-                >
-                  <HiPaperClip className="w-4 h-4" />
-                  <span>View Uploaded Proof File &rarr;</span>
-                </a>
+              <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-200">
+                <span className="text-[10px] uppercase font-bold text-gray-500 block mb-2">Attachment Proof</span>
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                  <img
+                    src={resolveFileUrl(selectedComplaint.attachment)}
+                    alt="Complaint Attachment"
+                    className="w-24 h-24 object-cover rounded-lg border border-gray-300 shadow-sm cursor-pointer hover:opacity-90 transition"
+                    onClick={() =>
+                      setPreviewProof({
+                        url: resolveFileUrl(selectedComplaint.attachment),
+                        title: `Ticket #${selectedComplaint.id} - ${selectedComplaint.title}`,
+                      })
+                    }
+                    onError={(e) => {
+                      e.target.style.display = 'none';
+                    }}
+                  />
+                  <div className="space-y-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPreviewProof({
+                          url: resolveFileUrl(selectedComplaint.attachment),
+                          title: `Ticket #${selectedComplaint.id} - ${selectedComplaint.title}`,
+                        })
+                      }
+                      className="inline-flex items-center gap-1.5 text-xs text-primary-600 hover:text-primary-700 hover:underline font-semibold"
+                    >
+                      <HiEye className="w-4 h-4" />
+                      <span>Preview Attachment Proof</span>
+                    </button>
+                    <div>
+                      <a
+                        href={resolveFileUrl(selectedComplaint.attachment)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-[11px] text-gray-500 hover:underline"
+                      >
+                        <HiArrowTopRightOnSquare className="w-3.5 h-3.5" />
+                        <span>Open in New Tab</span>
+                      </a>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -661,6 +708,55 @@ export default function MemberComplaints() {
             </div>
           </div>
         )}
+      </Modal>
+
+      {/* Proof Preview Modal */}
+      <Modal
+        isOpen={Boolean(previewProof)}
+        onClose={() => setPreviewProof(null)}
+        title={previewProof?.title || 'Attachment Proof'}
+        size="lg"
+      >
+        <div className="space-y-4">
+          <div className="bg-slate-900 rounded-xl overflow-hidden flex items-center justify-center min-h-[300px] max-h-[70vh] p-2">
+            {previewProof?.url?.toLowerCase().endsWith('.pdf') ? (
+              <iframe
+                src={previewProof?.url}
+                title="Document Proof"
+                className="w-full h-[65vh] border-0"
+              />
+            ) : (
+              <img
+                src={previewProof?.url}
+                alt="Proof Preview"
+                className="max-h-[65vh] max-w-full object-contain mx-auto rounded shadow-lg"
+                onError={(e) => {
+                  e.target.onerror = null;
+                  toast.error('Unable to display image preview.');
+                }}
+              />
+            )}
+          </div>
+          <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+            <a
+              href={previewProof?.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              download
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-semibold rounded-lg transition"
+            >
+              <HiArrowTopRightOnSquare className="w-4 h-4" />
+              <span>Open Original File</span>
+            </a>
+            <button
+              type="button"
+              onClick={() => setPreviewProof(null)}
+              className="px-4 py-1.5 bg-primary-600 hover:bg-primary-700 text-white text-xs font-semibold rounded-lg transition"
+            >
+              Close
+            </button>
+          </div>
+        </div>
       </Modal>
 
       {/* Confirm Delete */}

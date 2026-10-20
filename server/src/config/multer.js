@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const UPLOADS_BASE = path.resolve(__dirname, '../../uploads');
 
 // Ensure upload subdirectories exist
-const subdirs = ['proofs', 'news', 'voting', 'documents', 'logos', 'audio'];
+const subdirs = ['proofs', 'news', 'voting', 'documents', 'logos', 'audio', 'profiles'];
 subdirs.forEach((dir) => {
   const fullPath = path.join(UPLOADS_BASE, dir);
   if (!fs.existsSync(fullPath)) {
@@ -47,6 +47,8 @@ const createDiskStorage = (defaultSubdir = 'documents') => {
       let targetSubdir = defaultSubdir;
       if (file.fieldname === 'eb_bill_proof' || file.fieldname === 'property_tax_receipt') {
         targetSubdir = 'proofs';
+      } else if (file.fieldname === 'profile_photo' || file.fieldname === 'avatar') {
+        targetSubdir = 'profiles';
       } else if (file.fieldname === 'voice_message' || file.mimetype.startsWith('audio/')) {
         targetSubdir = 'audio';
       } else if (file.fieldname === 'logo') {

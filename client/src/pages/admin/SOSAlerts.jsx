@@ -220,7 +220,15 @@ export default function AdminSOSAlerts() {
           <p className="text-sm font-semibold text-gray-900">
             {row.user_name || row.member_name || `Member #${row.user_id}`}
           </p>
-          <p className="text-xs text-gray-500">{row.user_phone || row.door_no ? `Door: #${row.door_no}` : ''}</p>
+          <p className="text-xs text-gray-500">
+            {row.user_door_no ? `Door: #${row.user_door_no}` : ''}
+            {row.user_phone ? ` • 📞 ${row.user_phone}` : ''}
+          </p>
+          {(row.user_street || row.user_layout_name) && (
+            <p className="text-[11px] text-gray-400 truncate max-w-[220px]">
+              {[row.user_street, row.user_layout_name, row.user_district].filter(Boolean).join(', ')}
+            </p>
+          )}
         </div>
       ),
     },
@@ -449,8 +457,15 @@ export default function AdminSOSAlerts() {
                 </p>
                 <p>
                   <span className="text-gray-500">Address: </span>
-                  <span className="font-medium text-gray-800">
-                    {selectedAlert.door_no ? `Door #${selectedAlert.door_no}` : ''}
+                  <span className="font-semibold text-gray-800">
+                    {[
+                      selectedAlert.user_door_no && `Door: #${selectedAlert.user_door_no}`,
+                      selectedAlert.user_street && `Street: ${selectedAlert.user_street}`,
+                      selectedAlert.user_layout_name && `Layout: ${selectedAlert.user_layout_name}`,
+                      selectedAlert.user_taluk && `Taluk: ${selectedAlert.user_taluk}`,
+                      selectedAlert.user_district && `District: ${selectedAlert.user_district}`,
+                      selectedAlert.user_state && `State: ${selectedAlert.user_state}`,
+                    ].filter(Boolean).join(', ') || selectedAlert.notes || 'Registered Residence'}
                   </span>
                 </p>
                 <p>

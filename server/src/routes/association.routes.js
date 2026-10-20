@@ -106,7 +106,7 @@ router.get(
 router.put(
   '/:id',
   authenticate,
-  authorize('super_admin'),
+  authorize('super_admin', 'admin'),
   logoUploadMiddleware,
   [param('id').isInt().withMessage('Association ID must be an integer'), validate],
   associationController.update
@@ -140,6 +140,26 @@ router.put(
     validate
   ],
   associationController.assignAdmin
+);
+
+/**
+ * @route   PUT /api/v1/associations/:id/remove-admin
+ * @desc    Remove admin role from user (demote to resident member)
+ * @access  Private (Super Admin)
+ */
+router.put(
+  '/:id/remove-admin',
+  authenticate,
+  authorize('super_admin'),
+  [
+    param('id').isInt().withMessage('Association ID must be an integer'),
+    body('user_id').isInt().withMessage('Valid user ID is required'),
+    validate
+  ],
+  (req, res, next) => {
+    req.body.action = 'remove_admin';
+    return associationController.assignAdmin(req, res, next);
+  }
 );
 
 /**

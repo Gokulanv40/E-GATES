@@ -39,6 +39,8 @@ const authenticate = (req, res, next) => {
       req.user = {
         id: decoded.id,
         role: decoded.role,
+        is_main_admin: Boolean(decoded.is_main_admin),
+        designation: decoded.designation,
         association_id: decoded.association_id,
         name: decoded.name,
         email: decoded.email,

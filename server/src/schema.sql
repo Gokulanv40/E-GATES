@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS associations (
   address TEXT,
   logo VARCHAR(500),
   is_active BOOLEAN DEFAULT true,
+  main_admin_id INTEGER,
   created_at TIMESTAMPTZ DEFAULT NOW(),
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -22,6 +23,7 @@ CREATE TABLE IF NOT EXISTS users (
   phone VARCHAR(20),
   password_hash VARCHAR(255) NOT NULL,
   role VARCHAR(20) NOT NULL CHECK (role IN ('super_admin', 'admin', 'member')),
+  is_main_admin BOOLEAN DEFAULT false,
   association_id INTEGER REFERENCES associations(id) ON DELETE SET NULL,
   member_code VARCHAR(6) UNIQUE,
   door_no VARCHAR(50),

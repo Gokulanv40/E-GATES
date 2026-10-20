@@ -24,14 +24,32 @@ const eventController = {
         });
       }
 
-      const targetAssocId = role === 'super_admin'
-        ? (association_id || userAssocId)
-        : userAssocId;
+      let targetAssocIds = [];
+      if (role === 'super_admin') {
+        if (!association_id || association_id === 'all') {
+          const assocs = await pool.query('SELECT id FROM associations WHERE is_active = true');
+          targetAssocIds = assocs.rows.map((a) => a.id);
+          if (targetAssocIds.length === 0) {
+            const anyAssoc = await pool.query('SELECT id FROM associations LIMIT 1');
+            if (anyAssoc.rows.length > 0) targetAssocIds = [anyAssoc.rows[0].id];
+          }
+        } else {
+          targetAssocIds = [parseInt(association_id, 10)];
+        }
+      } else {
+        if (!userAssocId) {
+          return res.status(400).json({
+            success: false,
+            message: 'User must belong to an association to create an event'
+          });
+        }
+        targetAssocIds = [userAssocId];
+      }
 
-      if (!targetAssocId) {
+      if (targetAssocIds.length === 0) {
         return res.status(400).json({
           success: false,
-          message: 'Association ID is required'
+          message: 'Association ID is required to create an event'
         });
       }
 
@@ -41,44 +59,49 @@ const eventController = {
         RETURNING *
       `;
 
-      const values = [
-        targetAssocId,
-        title.trim(),
-        description ? description.trim() : null,
-        new Date(event_date),
-        end_date ? new Date(end_date) : null,
-        location ? location.trim() : null,
-        creatorId
-      ];
+      let firstCreated = null;
+      for (const tId of targetAssocIds) {
+        const values = [
+          tId,
+          title.trim(),
+          description ? description.trim() : null,
+          new Date(event_date),
+          end_date ? new Date(end_date) : null,
+          location ? location.trim() : null,
+          creatorId
+        ];
 
-      const result = await pool.query(insertQuery, values);
-      const event = result.rows[0];
+        const result = await pool.query(insertQuery, values);
+        if (!firstCreated) firstCreated = result.rows[0];
 
-      // Notify association members
-      try {
-        const members = await pool.query(
-          "SELECT id FROM users WHERE association_id = $1 AND status = 'approved'",
-          [targetAssocId]
-        );
-        for (const m of members.rows) {
-          await pool.query(
-            `INSERT INTO notifications (user_id, title, message, type, link)
-             VALUES ($1, $2, $3, 'info', '/member/events')`,
-            [
-              m.id,
-              `New Event: ${title.trim()}`,
-              `An upcoming event has been scheduled for ${new Date(event_date).toLocaleDateString()} at ${location || 'Layout Association'}.`
-            ]
+        // Notify association members
+        try {
+          const members = await pool.query(
+            "SELECT id FROM users WHERE association_id = $1 AND status = 'approved'",
+            [tId]
           );
+          for (const m of members.rows) {
+            await pool.query(
+              `INSERT INTO notifications (user_id, title, message, type, link)
+               VALUES ($1, $2, $3, 'info', '/member/events')`,
+              [
+                m.id,
+                `New Event: ${title.trim()}`,
+                `An upcoming event has been scheduled for ${new Date(event_date).toLocaleDateString()} at ${location || 'Layout Association'}.`
+              ]
+            );
+          }
+        } catch (err) {
+          console.error('Failed to notify members of new event:', err.message);
         }
-      } catch (err) {
-        console.error('Failed to notify members of new event:', err.message);
       }
 
       res.status(201).json({
         success: true,
-        message: 'Event created successfully',
-        data: event
+        message: targetAssocIds.length > 1
+          ? `Event broadcasted to all ${targetAssocIds.length} associations successfully`
+          : 'Event created successfully',
+        data: firstCreated
       });
     } catch (error) {
       next(error);
@@ -98,7 +121,7 @@ const eventController = {
         search,
         association_id: queryAssocId,
         page = 1,
-        limit = 20
+        limit = 500
       } = req.query;
 
       const pageNum = Math.max(1, parseInt(page, 10));

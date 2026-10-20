@@ -20,6 +20,8 @@ import {
   HiXCircle,
   HiXMark,
   HiArrowPath,
+  HiCamera,
+  HiPhoto,
 } from 'react-icons/hi2';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../hooks/useAuth';
@@ -31,6 +33,23 @@ export default function Profile() {
 
   const [loading, setLoading] = useState(false);
   const [profileData, setProfileData] = useState(user || {});
+
+  // Profile photo quick upload
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const photoInputRef = useRef(null);
+
+  // Association details & edit modal
+  const [assocDetails, setAssocDetails] = useState(null);
+  const [isEditAssocOpen, setIsEditAssocOpen] = useState(false);
+  const [submittingAssoc, setSubmittingAssoc] = useState(false);
+  const [assocLogoFile, setAssocLogoFile] = useState(null);
+  const [assocLogoPreview, setAssocLogoPreview] = useState(null);
+  const assocLogoInputRef = useRef(null);
+  const [assocForm, setAssocForm] = useState({
+    name: '',
+    city: '',
+    address: '',
+  });
 
   // Document upload state (page-level)
   const [ebFile, setEbFile] = useState(null);
@@ -44,6 +63,9 @@ export default function Profile() {
 
   // Edit Profile Modal
   const [isEditProfileOpen, setIsEditProfileOpen] = useState(false);
+  const [modalPhotoFile, setModalPhotoFile] = useState(null);
+  const [modalPhotoPreview, setModalPhotoPreview] = useState(null);
+  const modalPhotoInputRef = useRef(null);
   const [editForm, setEditForm] = useState({
     name: user?.name || '',
     phone: user?.phone || '',
@@ -55,6 +77,8 @@ export default function Profile() {
     taluk: user?.taluk || '',
     district: user?.district || '',
     state: user?.state || '',
+    password: '',
+    confirmPassword: '',
   });
 
   // Modal-level document upload state
@@ -130,6 +154,112 @@ export default function Profile() {
     fetchFreshProfile();
   }, [user?.id]);
 
+  const fetchAssocDetails = async (assocId) => {
+    if (!assocId) return;
+    try {
+      const res = await api.get(`/associations/${assocId}`);
+      const data = res.data?.data || res.data;
+      if (data) {
+        setAssocDetails(data);
+        setAssocForm({
+          name: data.name || '',
+          city: data.city || '',
+          address: data.address || '',
+        });
+      }
+    } catch (err) {
+      console.warn('Could not fetch association details:', err);
+    }
+  };
+
+  useEffect(() => {
+    const assocId = profileData.association_id || user?.association_id;
+    if (assocId) {
+      fetchAssocDetails(assocId);
+    }
+  }, [profileData.association_id, user?.association_id]);
+
+  // Handle direct profile photo upload from avatar
+  const handleDirectPhotoUpload = async (e) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+      toast.error('Please select an image file (PNG, JPG, JPEG, WEBP)');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Profile photo must be less than 5MB');
+      return;
+    }
+    try {
+      setUploadingPhoto(true);
+      const formData = new FormData();
+      formData.append('profile_photo', file);
+      const res = await api.put(`/users/${user.id}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const updated = res.data?.data || res.data;
+      if (updated) {
+        setProfileData(updated);
+        updateUser(updated);
+        toast.success('Profile photo updated successfully!');
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to upload profile photo');
+    } finally {
+      setUploadingPhoto(false);
+      if (photoInputRef.current) photoInputRef.current.value = '';
+    }
+  };
+
+  // Open Edit Association Modal
+  const handleOpenEditAssocModal = () => {
+    if (assocDetails) {
+      setAssocForm({
+        name: assocDetails.name || '',
+        city: assocDetails.city || '',
+        address: assocDetails.address || '',
+      });
+    }
+    setAssocLogoFile(null);
+    setAssocLogoPreview(null);
+    setIsEditAssocOpen(true);
+  };
+
+  // Save Association Details & Logo
+  const handleSaveAssociation = async (e) => {
+    e.preventDefault();
+    const assocId = profileData.association_id || user?.association_id;
+    if (!assocId) return;
+    try {
+      setSubmittingAssoc(true);
+      const formData = new FormData();
+      formData.append('name', assocForm.name.trim());
+      formData.append('city', assocForm.city.trim());
+      formData.append('address', assocForm.address.trim());
+      if (assocLogoFile) {
+        formData.append('logo', assocLogoFile);
+      }
+      const res = await api.put(`/associations/${assocId}`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' },
+      });
+      const updated = res.data?.data || res.data;
+      if (updated) {
+        setAssocDetails(updated);
+        setProfileData((prev) => ({ ...prev, association_name: updated.name }));
+        updateUser({ association_name: updated.name });
+      }
+      setAssocLogoFile(null);
+      setAssocLogoPreview(null);
+      setIsEditAssocOpen(false);
+      toast.success('Association details & logo updated successfully!');
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update association');
+    } finally {
+      setSubmittingAssoc(false);
+    }
+  };
+
   // Handle Save Address Proof Documents directly from profile page
   const handleSaveDocuments = async (e) => {
     if (e) e.preventDefault();
@@ -180,9 +310,13 @@ export default function Profile() {
       taluk: profileData.taluk || '',
       district: profileData.district || '',
       state: profileData.state || '',
+      password: '',
+      confirmPassword: '',
     });
     setModalEbFile(null);
     setModalTaxFile(null);
+    setModalPhotoFile(null);
+    setModalPhotoPreview(null);
     setIsEditProfileOpen(true);
   };
 
@@ -194,19 +328,39 @@ export default function Profile() {
       return;
     }
 
+    if (editForm.password) {
+      if (editForm.password.length < 6) {
+        toast.error('New password must be at least 6 characters');
+        return;
+      }
+      if (editForm.password !== editForm.confirmPassword) {
+        toast.error('Password and confirm password do not match');
+        return;
+      }
+    }
+
     try {
       setSubmitting(true);
       const formData = new FormData();
       formData.append('name', editForm.name.trim());
       formData.append('phone', editForm.phone.trim());
       formData.append('email', editForm.email.trim());
-      formData.append('language', editForm.language);
+      formData.append('language', editForm.language || 'en');
       formData.append('door_no', editForm.door_no.trim());
       formData.append('street', editForm.street.trim());
       formData.append('layout_name', editForm.layout_name.trim());
       formData.append('taluk', editForm.taluk.trim());
       formData.append('district', editForm.district.trim());
       formData.append('state', editForm.state.trim());
+
+      if (editForm.password) {
+        formData.append('password', editForm.password);
+      }
+
+      // If user selected new profile photo
+      if (modalPhotoFile) {
+        formData.append('profile_photo', modalPhotoFile);
+      }
 
       // If user selected new documents inside the edit modal
       if (modalEbFile) {
@@ -226,9 +380,11 @@ export default function Profile() {
         updateUser(updated);
       }
 
+      setModalPhotoFile(null);
+      setModalPhotoPreview(null);
       setModalEbFile(null);
       setModalTaxFile(null);
-      toast.success('All registration details & documents updated successfully!');
+      toast.success('Registration details & documents updated successfully!');
       setIsEditProfileOpen(false);
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to update profile');
@@ -276,6 +432,12 @@ export default function Profile() {
     : 'U';
 
   const isAdmin = profileData.role === 'admin' || profileData.role === 'super_admin';
+  const isSuperAdmin = profileData.role === 'super_admin';
+  const roleDisplay = profileData.is_main_admin
+    ? 'Main Association Admin'
+    : (profileData.role === 'admin'
+      ? 'Layout Admin'
+      : (profileData.role === 'super_admin' ? 'Super Admin' : 'Resident Member'));
 
   return (
     <div className="space-y-4 sm:space-y-6 max-w-5xl mx-auto pb-10">
@@ -288,14 +450,52 @@ export default function Profile() {
           }`}
         />
 
-        <div
-          className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl text-white font-extrabold text-2xl sm:text-3xl flex items-center justify-center flex-shrink-0 shadow-lg ring-4 ${
-            isAdmin
-              ? 'bg-gradient-to-tr from-purple-600 to-indigo-700 ring-purple-100'
-              : 'bg-gradient-to-tr from-primary-600 to-teal-600 ring-primary-100'
-          }`}
-        >
-          {initials}
+        <div className="relative group flex-shrink-0">
+          <div
+            className={`w-20 h-20 sm:w-24 sm:h-24 rounded-2xl text-white font-extrabold text-2xl sm:text-3xl flex items-center justify-center flex-shrink-0 shadow-lg ring-4 overflow-hidden relative ${
+              isAdmin
+                ? 'bg-gradient-to-tr from-purple-600 to-indigo-700 ring-purple-100'
+                : 'bg-gradient-to-tr from-primary-600 to-teal-600 ring-primary-100'
+            }`}
+          >
+            {profileData.profile_photo ? (
+              <img
+                src={resolveFileUrl(profileData.profile_photo)}
+                alt={profileData.name}
+                className="w-full h-full object-cover"
+                onError={(e) => {
+                  e.target.style.display = 'none';
+                }}
+              />
+            ) : (
+              initials
+            )}
+
+            {/* Upload Spinner Overlay */}
+            {uploadingPhoto && (
+              <div className="absolute inset-0 bg-black/60 flex items-center justify-center text-white">
+                <HiArrowPath className="w-6 h-6 animate-spin" />
+              </div>
+            )}
+          </div>
+
+          {/* Camera Button for Quick Photo Upload */}
+          <button
+            type="button"
+            onClick={() => photoInputRef.current?.click()}
+            disabled={uploadingPhoto}
+            title="Change Profile Photo"
+            className="absolute -bottom-1 -right-1 p-2 bg-white text-gray-700 hover:text-primary-600 dark:bg-slate-800 dark:text-gray-200 rounded-full shadow-md border border-gray-200 dark:border-slate-700 transition transform hover:scale-110 active:scale-95 focus:outline-none"
+          >
+            <HiCamera className="w-4 h-4" />
+          </button>
+          <input
+            ref={photoInputRef}
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={handleDirectPhotoUpload}
+          />
         </div>
 
         <div className="flex-1 text-center sm:text-left space-y-2 w-full">
@@ -307,18 +507,20 @@ export default function Profile() {
             {/* Role Badge */}
             <span
               className={`inline-flex items-center gap-1 text-[11px] sm:text-xs font-bold px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full uppercase tracking-wider ${
-                isAdmin
+                profileData.is_main_admin
                   ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                  : 'bg-blue-100 text-blue-800 border border-blue-200'
+                  : (isAdmin
+                    ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
+                    : 'bg-blue-100 text-blue-800 border border-blue-200')
               }`}
             >
               <HiShieldCheck className="w-3.5 h-3.5" />
-              {isAdmin ? 'Association Admin' : 'Resident Member'}
+              {roleDisplay}
             </span>
 
             {/* Code Badge */}
             <span className="font-mono text-[11px] sm:text-xs font-bold text-gray-700 bg-gray-100 border border-gray-200 px-2.5 sm:px-3 py-0.5 sm:py-1 rounded-full">
-              Code: {profileData.member_code || 'PENDING'}
+              {isSuperAdmin ? 'PLATFORM LEVEL' : `Code: ${profileData.member_code || 'PENDING'}`}
             </span>
 
             {/* Approval Status */}
@@ -345,7 +547,9 @@ export default function Profile() {
           <div className="flex items-center justify-center sm:justify-start text-xs sm:text-sm text-gray-600 font-medium pt-0.5">
             <span className="inline-flex items-center justify-center sm:justify-start gap-1.5 text-center sm:text-left">
               <HiBuildingOffice2 className="w-4 h-4 text-gray-400 flex-shrink-0" />
-              <span className="break-words">{profileData.association_name || 'Layout Resident Association'}</span>
+              <span className="break-words">
+                {profileData.association_name || (isSuperAdmin ? 'Jishnu Infotech • Multi-Association Platform Level' : 'Layout Resident Association')}
+              </span>
             </span>
           </div>
 
@@ -367,7 +571,7 @@ export default function Profile() {
               className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 sm:py-2 bg-primary-600 hover:bg-primary-700 text-white text-xs font-bold rounded-xl shadow-sm transition"
             >
               <HiPencilSquare className="w-4 h-4" />
-              <span>Edit Registration Details</span>
+              <span>Edit Profile Details</span>
             </button>
 
             <button
@@ -380,6 +584,125 @@ export default function Profile() {
           </div>
         </div>
       </div>
+
+      {/* Super Admin: Platform Organization & Provider Card */}
+      {isSuperAdmin && (
+        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-purple-100 shadow-sm space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-gray-100">
+            <div className="flex items-center gap-2">
+              <HiBuildingOffice2 className="w-5 h-5 text-purple-600" />
+              <h2 className="text-sm sm:text-base font-bold text-gray-900">
+                Platform Organization & Software Provider
+              </h2>
+            </div>
+            <span className="text-[11px] font-bold px-3 py-1 bg-purple-100 text-purple-800 rounded-full border border-purple-200 uppercase tracking-wide">
+              👑 Master Platform Level
+            </span>
+          </div>
+
+          <div className="flex flex-col md:flex-row items-center gap-6 p-4 sm:p-6 rounded-2xl bg-gradient-to-r from-purple-50/70 via-indigo-50/40 to-blue-50/40 border border-purple-100">
+            {/* Jishnu Infotech Banner Logo */}
+            <div className="w-full md:w-80 max-w-sm bg-white rounded-2xl p-4 border border-purple-100 flex items-center justify-center shadow-sm flex-shrink-0">
+              <img
+                src="/images/jishnu-banner-logo.png"
+                alt="Jishnu Infotech"
+                className="max-h-24 w-auto object-contain"
+                onError={(e) => {
+                  e.target.src = '/images/jishnu-logo.png';
+                }}
+              />
+            </div>
+
+            <div className="flex-1 space-y-2 text-center md:text-left">
+              <div>
+                <h3 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
+                  Jishnu Infotech
+                </h3>
+                <p className="text-xs sm:text-sm font-bold text-indigo-700 tracking-wide">
+                  Innovate • Integrate • Inspire
+                </p>
+              </div>
+              <p className="text-xs text-gray-600 leading-relaxed">
+                Centralized Enterprise Multi-Tenant Association Management Cloud Platform. Platform administrators manage association onboarding & approvals, platform administrators, cross-association community events, global voting broadcasts, and system-wide audit monitoring.
+              </p>
+              <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 pt-1 text-[11px] font-semibold text-gray-500">
+                <span className="px-2.5 py-0.5 rounded-full bg-white border border-gray-200">
+                  🌐 Platform Scope: Multi-Tenant Architecture
+                </span>
+                <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  ✓ System Status: Fully Operational
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Registered Association Details Card (with Edit Association Option for Admins) */}
+      {!isSuperAdmin && (profileData.association_id || profileData.association_name || assocDetails) && (
+        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-gray-100 shadow-sm space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-gray-100">
+            <div className="flex items-center gap-2">
+              <HiBuildingOffice2 className="w-5 h-5 text-indigo-600" />
+              <h2 className="text-sm sm:text-base font-bold text-gray-900">
+                Registered Association Details
+              </h2>
+            </div>
+            {isAdmin && (profileData.association_id || user?.association_id) && (
+              <button
+                type="button"
+                onClick={handleOpenEditAssocModal}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-xl transition shadow-xs"
+              >
+                <HiPencilSquare className="w-4 h-4" />
+                <span>Edit Association Details</span>
+              </button>
+            )}
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-4 p-4 rounded-2xl bg-indigo-50/40 border border-indigo-100/60">
+            {/* Association Logo */}
+            <div className="w-16 h-16 sm:w-20 sm:h-20 rounded-2xl bg-white border border-indigo-100 flex items-center justify-center overflow-hidden flex-shrink-0 shadow-sm p-1.5">
+              {assocDetails?.logo ? (
+                <img
+                  src={resolveFileUrl(assocDetails.logo)}
+                  alt={assocDetails.name || 'Association Logo'}
+                  className="w-full h-full object-contain"
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              ) : (
+                <div className="w-full h-full rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-lg">
+                  {assocDetails?.name ? assocDetails.name.slice(0, 2).toUpperCase() : 'AS'}
+                </div>
+              )}
+            </div>
+
+            <div className="flex-1 text-center sm:text-left space-y-1.5 min-w-0">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                <h3 className="text-base sm:text-lg font-bold text-gray-900">
+                  {assocDetails?.name || profileData.association_name || 'Layout Association'}
+                </h3>
+                <span className="text-[10px] uppercase font-bold px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+                  {assocDetails?.is_active !== false ? 'Active' : 'Inactive'}
+                </span>
+              </div>
+              <p className="text-xs text-gray-600 flex items-center justify-center sm:justify-start gap-1">
+                <HiMapPin className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                <span>
+                  {assocDetails?.city ? `${assocDetails.city}` : ''}
+                  {assocDetails?.address ? ` • ${assocDetails.address}` : ''}
+                  {!assocDetails?.city && !assocDetails?.address && 'Tamil Nadu, India'}
+                </span>
+              </p>
+              {assocDetails?.main_admin_name && (
+                <p className="text-[11px] text-gray-500">
+                  Main Administrator: <strong className="text-gray-800">{assocDetails.main_admin_name}</strong>
+                </p>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Grid: Personal Details & Layout Residence Address */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
@@ -421,7 +744,7 @@ export default function Profile() {
                   Registered Role
                 </span>
                 <span className="text-xs font-bold text-primary-700 capitalize">
-                  {profileData.role === 'admin' ? 'Association Admin' : 'Resident Member'}
+                  {roleDisplay}
                 </span>
               </div>
 
@@ -437,77 +760,134 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* Section 2: Layout Residence Address */}
-        <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-100 shadow-sm space-y-4">
-          <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-            <h2 className="text-sm sm:text-base font-bold text-gray-900 flex items-center gap-2">
-              <HiHome className="w-5 h-5 text-emerald-600" />
-              Layout Residence Address
-            </h2>
-            <span className="text-[10px] sm:text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-              Step 3 of Reg
-            </span>
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 text-xs">
-            <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-              <span className="text-gray-400 block font-semibold uppercase text-[10px]">
-                Door / Plot No
-              </span>
-              <span className="text-sm font-bold text-gray-900">{profileData.door_no || '—'}</span>
-            </div>
-
-            <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-              <span className="text-gray-400 block font-semibold uppercase text-[10px]">
-                Street / Cross
-              </span>
-              <span className="text-sm font-bold text-gray-900">{profileData.street || '—'}</span>
-            </div>
-
-            <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100 sm:col-span-2">
-              <span className="text-gray-400 block font-semibold uppercase text-[10px]">
-                Layout / Colony Name
-              </span>
-              <span className="text-sm font-bold text-gray-900">{profileData.layout_name || '—'}</span>
-            </div>
-
-            <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-              <span className="text-gray-400 block font-semibold uppercase text-[10px]">Taluk</span>
-              <span className="text-sm font-bold text-gray-900">{profileData.taluk || '—'}</span>
-            </div>
-
-            <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
-              <span className="text-gray-400 block font-semibold uppercase text-[10px]">
-                District & State
-              </span>
-              <span className="text-sm font-bold text-gray-900">
-                {profileData.district || '—'}
-                {profileData.state ? `, ${profileData.state}` : ''}
+        {/* Section 2: Layout Residence Address or Super Admin Platform Authority */}
+        {isSuperAdmin ? (
+          <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-100 shadow-sm space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+              <h2 className="text-sm sm:text-base font-bold text-gray-900 flex items-center gap-2">
+                <HiShieldCheck className="w-5 h-5 text-purple-600" />
+                Platform Privileges & Authority
+              </h2>
+              <span className="text-[10px] sm:text-[11px] font-semibold text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-200 uppercase tracking-wider">
+                Full Root Authority
               </span>
             </div>
-          </div>
 
-          {/* Formatted Postal Representation */}
-          <div className="p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-100 flex items-start gap-2.5">
-            <HiMapPin className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
-            <div className="text-xs text-emerald-950 font-medium leading-relaxed">
-              {[
-                profileData.door_no ? `Door / Plot ${profileData.door_no}` : null,
-                profileData.street,
-                profileData.layout_name,
-                profileData.taluk ? `${profileData.taluk} Taluk` : null,
-                profileData.district,
-                profileData.state,
-              ]
-                .filter(Boolean)
-                .join(', ') || 'No complete address recorded yet'}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 text-xs">
+              <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-100">
+                <span className="text-purple-600 block font-semibold uppercase text-[10px]">
+                  Multi-Tenant Scope
+                </span>
+                <span className="text-sm font-bold text-gray-900">All Registered Associations</span>
+              </div>
+
+              <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-100">
+                <span className="text-purple-600 block font-semibold uppercase text-[10px]">
+                  Association Management
+                </span>
+                <span className="text-sm font-bold text-gray-900">Create, Approve & Manage</span>
+              </div>
+
+              <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-100 sm:col-span-2">
+                <span className="text-purple-600 block font-semibold uppercase text-[10px]">
+                  User Directory Authority
+                </span>
+                <span className="text-sm font-bold text-gray-900">Global Cross-Association Access & Approval</span>
+              </div>
+
+              <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-100">
+                <span className="text-purple-600 block font-semibold uppercase text-[10px]">Broadcast & SOS</span>
+                <span className="text-sm font-bold text-gray-900">Platform-Wide Alerts & Events</span>
+              </div>
+
+              <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-100">
+                <span className="text-purple-600 block font-semibold uppercase text-[10px]">
+                  Technology Partner
+                </span>
+                <span className="text-sm font-bold text-gray-900">Jishnu Infotech Platform Engine</span>
+              </div>
+            </div>
+
+            <div className="p-3.5 bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 rounded-xl border border-purple-200/60 flex items-start gap-2.5">
+              <HiShieldCheck className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
+              <div className="text-xs text-purple-950 font-medium leading-relaxed">
+                As Super Admin, your account has root administrative authority over the entire multi-tenant residential association platform. Residential plot documents and layout addresses are not required.
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-100 shadow-sm space-y-4">
+            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
+              <h2 className="text-sm sm:text-base font-bold text-gray-900 flex items-center gap-2">
+                <HiHome className="w-5 h-5 text-emerald-600" />
+                Layout Residence Address
+              </h2>
+              <span className="text-[10px] sm:text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                Step 3 of Reg
+              </span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 text-xs">
+              <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
+                <span className="text-gray-400 block font-semibold uppercase text-[10px]">
+                  Door / Plot No
+                </span>
+                <span className="text-sm font-bold text-gray-900">{profileData.door_no || '—'}</span>
+              </div>
+
+              <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
+                <span className="text-gray-400 block font-semibold uppercase text-[10px]">
+                  Street / Cross
+                </span>
+                <span className="text-sm font-bold text-gray-900">{profileData.street || '—'}</span>
+              </div>
+
+              <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100 sm:col-span-2">
+                <span className="text-gray-400 block font-semibold uppercase text-[10px]">
+                  Layout / Colony Name
+                </span>
+                <span className="text-sm font-bold text-gray-900">{profileData.layout_name || '—'}</span>
+              </div>
+
+              <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
+                <span className="text-gray-400 block font-semibold uppercase text-[10px]">Taluk</span>
+                <span className="text-sm font-bold text-gray-900">{profileData.taluk || '—'}</span>
+              </div>
+
+              <div className="p-3 bg-gray-50/80 rounded-xl border border-gray-100">
+                <span className="text-gray-400 block font-semibold uppercase text-[10px]">
+                  District & State
+                </span>
+                <span className="text-sm font-bold text-gray-900">
+                  {profileData.district || '—'}
+                  {profileData.state ? `, ${profileData.state}` : ''}
+                </span>
+              </div>
+            </div>
+
+            {/* Formatted Postal Representation */}
+            <div className="p-3.5 bg-emerald-50/60 rounded-xl border border-emerald-100 flex items-start gap-2.5">
+              <HiMapPin className="w-5 h-5 text-emerald-600 flex-shrink-0 mt-0.5" />
+              <div className="text-xs text-emerald-950 font-medium leading-relaxed">
+                {[
+                  profileData.door_no ? `Door / Plot ${profileData.door_no}` : null,
+                  profileData.street,
+                  profileData.layout_name,
+                  profileData.taluk ? `${profileData.taluk} Taluk` : null,
+                  profileData.district,
+                  profileData.state,
+                ]
+                  .filter(Boolean)
+                  .join(', ') || 'No complete address recorded yet'}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* Section 3: Address Proof Documents (Step 4 of Reg) */}
-      <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-100 shadow-sm space-y-4">
+      {/* Section 3: Address Proof Documents (Step 4 of Reg) - Excluded for Super Admin */}
+      {!isSuperAdmin && (
+        <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-100 shadow-sm space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-1 pb-2 border-b border-gray-100">
           <div className="flex items-center gap-2">
             <div className="w-2.5 h-2.5 rounded-full bg-primary-600 flex-shrink-0" />
@@ -773,141 +1153,211 @@ export default function Profile() {
           </div>
         )}
       </div>
+      )}
 
-      {/* Modal: Edit Registration & Profile Details (ALL FIELDS & DOCUMENTS INCLUDED) */}
+      {/* Modal: Edit Registration & Profile Details (MATCHING REGISTRATION LAYOUT) */}
       <Modal
         isOpen={isEditProfileOpen}
         onClose={() => setIsEditProfileOpen(false)}
         title="Edit Registration & Profile Details"
-        size="lg"
+        size="xl"
       >
-        <form onSubmit={handleSaveProfile} className="space-y-5 max-h-[80vh] overflow-y-auto pr-1">
-          {/* Association & Role Overview */}
-          <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 flex flex-wrap items-center justify-between gap-2 text-xs">
-            <div>
-              <span className="text-gray-500 block text-[10px] uppercase font-bold">Association</span>
-              <span className="font-bold text-gray-900">
-                {profileData.association_name || 'Layout Resident Association'}
-              </span>
+        <form onSubmit={handleSaveProfile} className="space-y-6 max-h-[82vh] overflow-y-auto px-1 pr-2">
+          {/* Association & Role Overview Bar */}
+          <div className="p-3 bg-blue-50/70 rounded-2xl border border-blue-100 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2">
+              <HiBuildingOffice2 className="w-5 h-5 text-blue-600 flex-shrink-0" />
+              <div>
+                <span className="text-gray-500 block text-[10px] uppercase font-bold">
+                  {isSuperAdmin ? 'Platform Provider' : 'Assigned Association'}
+                </span>
+                <span className="font-bold text-blue-900 text-sm">
+                  {isSuperAdmin ? 'Jishnu Infotech (Platform Level)' : (profileData.association_name || 'Layout Resident Association')}
+                </span>
+              </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="px-2.5 py-1 bg-white border border-gray-200 text-gray-700 font-bold rounded-lg uppercase text-[10px]">
-                {profileData.role === 'admin' ? 'Association Admin' : 'Resident Member'}
+              <span className="px-3 py-1 bg-white border border-blue-200 text-blue-800 font-bold rounded-xl uppercase text-[11px] shadow-sm">
+                {roleDisplay}
               </span>
-              <span className="px-2.5 py-1 bg-primary-50 text-primary-700 border border-primary-200 font-mono font-bold rounded-lg text-[10px]">
-                Code: {profileData.member_code || 'PENDING'}
+              <span className="px-3 py-1 bg-blue-600 text-white font-mono font-bold rounded-xl text-[11px] shadow-sm">
+                Code: {profileData.member_code || (isSuperAdmin ? '#000001' : 'PENDING')}
               </span>
             </div>
           </div>
 
-          {/* Section 1: Personal & Contact Information */}
+          {/* 1. PROFILE PHOTO */}
+          <div className="p-4 bg-gray-50/80 rounded-2xl border border-gray-100 flex flex-col sm:flex-row items-center gap-4">
+            <div className="w-16 h-16 rounded-2xl overflow-hidden bg-primary-100 text-primary-700 flex items-center justify-center font-bold text-xl ring-2 ring-primary-200 flex-shrink-0 shadow-sm">
+              {modalPhotoPreview ? (
+                <img src={modalPhotoPreview} alt="Preview" className="w-full h-full object-cover" />
+              ) : profileData.profile_photo ? (
+                <img src={resolveFileUrl(profileData.profile_photo)} alt="Current" className="w-full h-full object-cover" />
+              ) : (
+                initials
+              )}
+            </div>
+            <div className="flex-1 text-center sm:text-left">
+              <label className="block text-xs font-bold text-gray-800 mb-0.5">
+                Profile Photo
+              </label>
+              <p className="text-[11px] text-gray-500 mb-2">
+                Upload a portrait photo for your account (PNG, JPG, max 5MB).
+              </p>
+              <div className="flex items-center justify-center sm:justify-start gap-2">
+                <button
+                  type="button"
+                  onClick={() => modalPhotoInputRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 text-xs font-semibold rounded-xl transition shadow-xs"
+                >
+                  <HiCamera className="w-4 h-4 text-primary-600" />
+                  <span>{modalPhotoPreview || profileData.profile_photo ? 'Change Photo' : 'Upload Photo'}</span>
+                </button>
+                {modalPhotoPreview && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setModalPhotoFile(null);
+                      setModalPhotoPreview(null);
+                    }}
+                    className="text-xs text-rose-600 hover:text-rose-700 font-semibold px-2 py-1"
+                  >
+                    Clear Selection
+                  </button>
+                )}
+                <input
+                  ref={modalPhotoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      if (f.size > 5 * 1024 * 1024) {
+                        toast.error('Profile photo must be less than 5MB');
+                        return;
+                      }
+                      setModalPhotoFile(f);
+                      setModalPhotoPreview(URL.createObjectURL(f));
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* 2. PERSONAL DETAILS */}
           <div className="space-y-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-primary-800 flex items-center gap-1.5 pb-1 border-b border-gray-100">
-              <HiEnvelope className="w-4 h-4 text-primary-600" />
-              1. Personal & Contact Details
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <h3 className="text-sm font-bold text-blue-600 flex items-center gap-2">
+              <HiUser className="w-5 h-5 text-blue-600" />
+              <span>2. PERSONAL DETAILS</span>
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
                   Full Name *
                 </label>
                 <input
                   type="text"
                   required
+                  placeholder="e.g. S. Muralidharan"
                   value={editForm.name}
                   onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
-                  Phone Number
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Phone Number *
                 </label>
                 <input
                   type="tel"
+                  required
+                  placeholder="10-digit mobile"
                   value={editForm.phone}
                   onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
                   Email Address
                 </label>
                 <input
                   type="email"
+                  placeholder="name@example.com"
                   value={editForm.email}
                   onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
                   Language Preference
                 </label>
                 <select
-                  value={editForm.language}
+                  value={editForm.language || 'en'}
                   onChange={(e) => setEditForm({ ...editForm, language: e.target.value })}
-                  className="w-full px-3 py-2 text-sm bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                 >
-                  <option value="en">English (Default)</option>
+                  <option value="en">English (en)</option>
                   <option value="ta">தமிழ் (Tamil)</option>
                 </select>
               </div>
             </div>
           </div>
 
-          {/* Section 2: Residence & Layout Address */}
-          <div className="space-y-3 pt-2">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-emerald-800 flex items-center gap-1.5 pb-1 border-b border-gray-100">
-              <HiHome className="w-4 h-4 text-emerald-600" />
-              2. Layout Residence Address
-            </h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {/* 3. LAYOUT RESIDENCE ADDRESS */}
+          <div className="space-y-3 pt-1">
+            <h3 className="text-sm font-bold text-blue-600 flex items-center gap-2">
+              <HiHome className="w-5 h-5 text-blue-600" />
+              <span>3. LAYOUT RESIDENCE ADDRESS</span>
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3.5">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Door / Plot Number
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Door / Plot No *
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Plot 42 / Door 12B"
+                  placeholder="e.g. 14A or Plot 21"
                   value={editForm.door_no}
                   onChange={(e) => setEditForm({ ...editForm, door_no: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
-                  Street / Cross
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Street / Cross *
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. 2nd Main Road, 4th Cross"
+                  placeholder="e.g. 2nd Cross Street"
                   value={editForm.street}
                   onChange={(e) => setEditForm({ ...editForm, street: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                 />
               </div>
 
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
                   Layout / Colony Name
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Sri Krishna Nagar Layout"
+                  placeholder="e.g. Green Valley Gardens"
                   value={editForm.layout_name}
                   onChange={(e) => setEditForm({ ...editForm, layout_name: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
                   Taluk
                 </label>
                 <input
@@ -915,12 +1365,12 @@ export default function Profile() {
                   placeholder="e.g. Tambaram"
                   value={editForm.taluk}
                   onChange={(e) => setEditForm({ ...editForm, taluk: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
                   District
                 </label>
                 <input
@@ -928,40 +1378,37 @@ export default function Profile() {
                   placeholder="e.g. Chengalpattu"
                   value={editForm.district}
                   onChange={(e) => setEditForm({ ...editForm, district: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                 />
               </div>
 
-              <div className="sm:col-span-2">
-                <label className="block text-xs font-medium text-gray-700 mb-1">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
                   State
                 </label>
                 <input
                   type="text"
-                  placeholder="e.g. Tamil Nadu"
+                  placeholder="Tamil Nadu"
                   value={editForm.state}
                   onChange={(e) => setEditForm({ ...editForm, state: e.target.value })}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 focus:outline-none"
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
                 />
               </div>
             </div>
           </div>
 
-          {/* Section 3: Address Proof Documents Upload */}
-          <div className="space-y-3 pt-2">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-800 flex items-center gap-1.5 pb-1 border-b border-gray-100">
-              <HiDocumentText className="w-4 h-4 text-indigo-600" />
-              3. Address Proof Documents (Mandatory for Verification)
-            </h4>
-            <p className="text-[11px] text-gray-500">
-              Upload or update your address verification documents. Supported formats: PDF, JPG, PNG (Max 5MB each).
-            </p>
+          {/* 4. ADDRESS PROOF DOCUMENTS (MANDATORY FOR VERIFICATION) */}
+          <div className="space-y-3 pt-1">
+            <h3 className="text-sm font-bold text-blue-600 flex items-center gap-2">
+              <HiMapPin className="w-5 h-5 text-blue-600" />
+              <span>4. ADDRESS PROOF DOCUMENTS (MANDATORY FOR VERIFICATION)</span>
+            </h3>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {/* EB Bill Input in Modal */}
+              {/* Electricity (EB) Bill Proof Dropzone */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-gray-800">
+                  <label className="block text-xs font-semibold text-gray-700">
                     Electricity (EB) Bill Proof
                   </label>
                   {profileData.eb_bill_proof && (
@@ -969,10 +1416,11 @@ export default function Profile() {
                       href={resolveFileUrl(profileData.eb_bill_proof)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[10px] text-primary-600 hover:text-primary-800 font-bold inline-flex items-center gap-1"
+                      className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold inline-flex items-center gap-1"
                     >
+                      <HiCheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Current File</span>
                       <HiArrowTopRightOnSquare className="w-3 h-3" />
-                      View Current
                     </a>
                   )}
                 </div>
@@ -986,7 +1434,7 @@ export default function Profile() {
                     const file = e.target.files?.[0];
                     if (file) {
                       if (file.size > 5 * 1024 * 1024) {
-                        toast.error('EB file exceeds 5MB limit');
+                        toast.error('EB Bill file exceeds 5MB limit');
                         return;
                       }
                       setModalEbFile(file);
@@ -997,22 +1445,26 @@ export default function Profile() {
                 {!modalEbFile ? (
                   <div
                     onClick={() => modalEbInputRef.current?.click()}
-                    className="border-2 border-dashed border-sky-200 hover:border-primary-400 bg-sky-50/20 hover:bg-sky-50/50 rounded-xl p-4 text-center cursor-pointer transition flex flex-col items-center justify-center min-h-[110px] group"
+                    className="border-2 border-dashed border-blue-200 hover:border-blue-400 bg-blue-50/20 hover:bg-blue-50/50 rounded-2xl p-5 text-center cursor-pointer transition flex flex-col items-center justify-center min-h-[120px] group"
                   >
-                    <HiArrowUpTray className="w-5 h-5 text-sky-500 group-hover:text-primary-600 mb-1" />
-                    <p className="text-xs font-bold text-primary-600 group-hover:text-primary-700">
-                      Click to upload or drag & drop
+                    <div className="w-10 h-10 rounded-full bg-blue-100/70 text-blue-600 flex items-center justify-center mb-2 group-hover:scale-110 transition">
+                      <HiArrowUpTray className="w-5 h-5" />
+                    </div>
+                    <p className="text-xs font-bold text-blue-600 group-hover:text-blue-700">
+                      Click to upload or drag and drop
                     </p>
-                    <p className="text-[10px] text-gray-400">
+                    <p className="text-[10px] text-gray-400 mt-0.5">
                       Electricity Bill PDF/JPG (Max 5MB)
                     </p>
                   </div>
                 ) : (
-                  <div className="border border-sky-200 bg-sky-50/60 rounded-xl p-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <HiDocumentText className="w-5 h-5 text-sky-600 flex-shrink-0" />
+                  <div className="border border-blue-200 bg-blue-50/50 rounded-2xl p-3.5 flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
+                        <HiDocumentText className="w-5 h-5" />
+                      </div>
                       <div>
-                        <p className="text-xs font-bold text-gray-900 truncate max-w-[140px]">
+                        <p className="text-xs font-bold text-gray-900 truncate max-w-[160px]">
                           {modalEbFile.name}
                         </p>
                         <p className="text-[10px] text-gray-500">{formatFileSize(modalEbFile.size)}</p>
@@ -1024,7 +1476,7 @@ export default function Profile() {
                         setModalEbFile(null);
                         if (modalEbInputRef.current) modalEbInputRef.current.value = '';
                       }}
-                      className="p-1 text-gray-400 hover:text-red-500 rounded"
+                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-white rounded-lg transition"
                     >
                       <HiXMark className="w-4 h-4" />
                     </button>
@@ -1032,10 +1484,10 @@ export default function Profile() {
                 )}
               </div>
 
-              {/* Property Tax Input in Modal */}
+              {/* Property Tax Receipt Dropzone */}
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between">
-                  <label className="block text-xs font-bold text-gray-800">
+                  <label className="block text-xs font-semibold text-gray-700">
                     Property Tax Receipt
                   </label>
                   {profileData.property_tax_receipt && (
@@ -1043,10 +1495,11 @@ export default function Profile() {
                       href={resolveFileUrl(profileData.property_tax_receipt)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="text-[10px] text-emerald-700 hover:text-emerald-900 font-bold inline-flex items-center gap-1"
+                      className="text-[11px] text-blue-600 hover:text-blue-800 font-semibold inline-flex items-center gap-1"
                     >
+                      <HiCheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>Current File</span>
                       <HiArrowTopRightOnSquare className="w-3 h-3" />
-                      View Current
                     </a>
                   )}
                 </div>
@@ -1060,7 +1513,7 @@ export default function Profile() {
                     const file = e.target.files?.[0];
                     if (file) {
                       if (file.size > 5 * 1024 * 1024) {
-                        toast.error('Tax file exceeds 5MB limit');
+                        toast.error('Tax Receipt file exceeds 5MB limit');
                         return;
                       }
                       setModalTaxFile(file);
@@ -1071,22 +1524,26 @@ export default function Profile() {
                 {!modalTaxFile ? (
                   <div
                     onClick={() => modalTaxInputRef.current?.click()}
-                    className="border-2 border-dashed border-emerald-200 hover:border-emerald-400 bg-emerald-50/20 hover:bg-emerald-50/50 rounded-xl p-4 text-center cursor-pointer transition flex flex-col items-center justify-center min-h-[110px] group"
+                    className="border-2 border-dashed border-blue-200 hover:border-blue-400 bg-blue-50/20 hover:bg-blue-50/50 rounded-2xl p-5 text-center cursor-pointer transition flex flex-col items-center justify-center min-h-[120px] group"
                   >
-                    <HiArrowUpTray className="w-5 h-5 text-emerald-500 group-hover:text-emerald-600 mb-1" />
-                    <p className="text-xs font-bold text-emerald-700 group-hover:text-emerald-800">
-                      Click to upload or drag & drop
+                    <div className="w-10 h-10 rounded-full bg-blue-100/70 text-blue-600 flex items-center justify-center mb-2 group-hover:scale-110 transition">
+                      <HiArrowUpTray className="w-5 h-5" />
+                    </div>
+                    <p className="text-xs font-bold text-blue-600 group-hover:text-blue-700">
+                      Click to upload or drag and drop
                     </p>
-                    <p className="text-[10px] text-gray-400">
+                    <p className="text-[10px] text-gray-400 mt-0.5">
                       Property Tax Receipt PDF/JPG (Max 5MB)
                     </p>
                   </div>
                 ) : (
-                  <div className="border border-emerald-200 bg-emerald-50/60 rounded-xl p-3 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <HiDocumentText className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                  <div className="border border-blue-200 bg-blue-50/50 rounded-2xl p-3.5 flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center flex-shrink-0">
+                        <HiDocumentText className="w-5 h-5" />
+                      </div>
                       <div>
-                        <p className="text-xs font-bold text-gray-900 truncate max-w-[140px]">
+                        <p className="text-xs font-bold text-gray-900 truncate max-w-[160px]">
                           {modalTaxFile.name}
                         </p>
                         <p className="text-[10px] text-gray-500">{formatFileSize(modalTaxFile.size)}</p>
@@ -1098,7 +1555,7 @@ export default function Profile() {
                         setModalTaxFile(null);
                         if (modalTaxInputRef.current) modalTaxInputRef.current.value = '';
                       }}
-                      className="p-1 text-gray-400 hover:text-red-500 rounded"
+                      className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-white rounded-lg transition"
                     >
                       <HiXMark className="w-4 h-4" />
                     </button>
@@ -1108,28 +1565,64 @@ export default function Profile() {
             </div>
           </div>
 
-          {/* Action buttons in Modal */}
-          <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-100">
+          {/* 5. SECURITY PASSWORD */}
+          <div className="space-y-3 pt-1">
+            <h3 className="text-sm font-bold text-blue-600 flex items-center gap-2">
+              <HiKey className="w-5 h-5 text-blue-600" />
+              <span>5. SECURITY PASSWORD (OPTIONAL - LEAVE EMPTY TO KEEP CURRENT)</span>
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Password
+                </label>
+                <input
+                  type="password"
+                  minLength={6}
+                  placeholder="Min 6 characters"
+                  value={editForm.password}
+                  onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                />
+              </div>
+
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  Confirm Password
+                </label>
+                <input
+                  type="password"
+                  placeholder="Re-type password"
+                  value={editForm.confirmPassword}
+                  onChange={(e) => setEditForm({ ...editForm, confirmPassword: e.target.value })}
+                  className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-900"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Action buttons matching Registration Submit style */}
+          <div className="pt-4 border-t border-gray-100 flex flex-col sm:flex-row items-center justify-end gap-3">
             <button
               type="button"
               disabled={submitting}
               onClick={() => setIsEditProfileOpen(false)}
-              className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
+              className="w-full sm:w-auto px-5 py-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition"
             >
               Cancel
             </button>
             <button
               type="submit"
               disabled={submitting}
-              className="px-6 py-2.5 text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-xl shadow-sm disabled:opacity-50 transition flex items-center gap-2"
+              className="w-full sm:w-auto px-8 py-3 text-sm font-bold text-white bg-blue-600 hover:bg-blue-700 rounded-xl shadow-md shadow-blue-600/20 disabled:opacity-50 transition flex items-center justify-center gap-2"
             >
               {submitting ? (
                 <>
                   <HiArrowPath className="w-4 h-4 animate-spin" />
-                  <span>Saving Changes...</span>
+                  <span>Saving Updates...</span>
                 </>
               ) : (
-                'Save Profile Changes'
+                'Submit Registration Request Updates'
               )}
             </button>
           </div>
@@ -1205,6 +1698,140 @@ export default function Profile() {
               className="px-5 py-2 text-sm font-semibold text-white bg-primary-600 hover:bg-primary-700 rounded-lg shadow-sm disabled:opacity-50 transition"
             >
               {submitting ? 'Updating...' : 'Update Password'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal: Edit Association Details & Logo */}
+      <Modal
+        isOpen={isEditAssocOpen}
+        onClose={() => setIsEditAssocOpen(false)}
+        title="Edit Association Details & Logo"
+        size="lg"
+      >
+        <form onSubmit={handleSaveAssociation} className="space-y-5 p-1">
+          {/* Association Logo Upload & Preview */}
+          <div className="p-4 bg-indigo-50/60 rounded-2xl border border-indigo-100 flex flex-col sm:flex-row items-center gap-4">
+            <div className="w-20 h-20 rounded-2xl overflow-hidden bg-white border border-indigo-200 flex items-center justify-center p-2 flex-shrink-0 shadow-sm">
+              {assocLogoPreview ? (
+                <img src={assocLogoPreview} alt="Logo Preview" className="w-full h-full object-contain" />
+              ) : assocDetails?.logo ? (
+                <img src={resolveFileUrl(assocDetails.logo)} alt="Current Logo" className="w-full h-full object-contain" />
+              ) : (
+                <div className="w-full h-full rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xl">
+                  {assocForm.name ? assocForm.name.slice(0, 2).toUpperCase() : 'AS'}
+                </div>
+              )}
+            </div>
+            <div className="flex-1 text-center sm:text-left">
+              <label className="block text-xs font-bold text-gray-800 mb-1">
+                Association Logo / Emblem
+              </label>
+              <p className="text-[11px] text-gray-500 mb-2">
+                Upload your community or association logo image (PNG, JPG, SVG, max 5MB).
+              </p>
+              <div className="flex items-center justify-center sm:justify-start gap-2">
+                <button
+                  type="button"
+                  onClick={() => assocLogoInputRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-gray-100 text-gray-700 border border-gray-200 text-xs font-semibold rounded-xl transition shadow-xs"
+                >
+                  <HiPhoto className="w-4 h-4 text-indigo-600" />
+                  <span>{assocLogoPreview || assocDetails?.logo ? 'Change Logo' : 'Upload Logo'}</span>
+                </button>
+                {assocLogoPreview && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAssocLogoFile(null);
+                      setAssocLogoPreview(null);
+                    }}
+                    className="text-xs text-rose-600 hover:text-rose-700 font-semibold px-2 py-1"
+                  >
+                    Clear Selection
+                  </button>
+                )}
+                <input
+                  ref={assocLogoInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) {
+                      if (f.size > 5 * 1024 * 1024) {
+                        toast.error('Logo file must be less than 5MB');
+                        return;
+                      }
+                      setAssocLogoFile(f);
+                      setAssocLogoPreview(URL.createObjectURL(f));
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Association Name */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">
+              Association Name *
+            </label>
+            <input
+              type="text"
+              required
+              value={assocForm.name}
+              onChange={(e) => setAssocForm({ ...assocForm, name: e.target.value })}
+              className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+              placeholder="e.g. Green Meadows Residents Welfare Association"
+            />
+          </div>
+
+          {/* City */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">
+              City / Town *
+            </label>
+            <input
+              type="text"
+              required
+              value={assocForm.city}
+              onChange={(e) => setAssocForm({ ...assocForm, city: e.target.value })}
+              className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+              placeholder="e.g. Coimbatore"
+            />
+          </div>
+
+          {/* Address */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">
+              Full Postal Address
+            </label>
+            <textarea
+              rows={3}
+              value={assocForm.address}
+              onChange={(e) => setAssocForm({ ...assocForm, address: e.target.value })}
+              className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+              placeholder="e.g. Main Avenue, Phase 1, Saravanampatti, Coimbatore 641035"
+            />
+          </div>
+
+          {/* Modal Actions */}
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={() => setIsEditAssocOpen(false)}
+              className="px-4 py-2 border border-gray-200 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-100 transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submittingAssoc}
+              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition shadow-sm disabled:opacity-50"
+            >
+              {submittingAssoc ? 'Saving Changes...' : 'Save Association Details'}
             </button>
           </div>
         </form>

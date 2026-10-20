@@ -14,6 +14,7 @@ import {
   HiSparkles,
   HiCheck,
   HiStar,
+  HiBuildingOffice2,
 } from 'react-icons/hi2';
 import {
   format,
@@ -72,6 +73,10 @@ export default function AdminEvents() {
   const [events, setEvents] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Super Admin Association Filter
+  const [associations, setAssociations] = useState([]);
+  const [selectedAssociationFilter, setSelectedAssociationFilter] = useState('all');
+
   // View Mode: 'month' (Single month - Main preference) | 'year' (Full 12-month calendar) | 'list' (Table)
   const [viewMode, setViewMode] = useState('month');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
@@ -95,14 +100,31 @@ export default function AdminEvents() {
     event_date: '',
     end_date: '',
     location: '',
+    association_id: 'all',
   });
 
   const [submitting, setSubmitting] = useState(false);
 
+  // Load associations for super_admin
+  useEffect(() => {
+    if (user?.role === 'super_admin') {
+      api.get('/associations')
+        .then((res) => {
+          const list = res.data?.data || res.data || [];
+          setAssociations(Array.isArray(list) ? list : []);
+        })
+        .catch((err) => console.warn('Could not load associations for events:', err));
+    }
+  }, [user?.role]);
+
   const fetchEvents = useCallback(async () => {
     try {
       setLoading(true);
-      const res = await api.get('/events');
+      const queryParams = new URLSearchParams({ limit: '500' });
+      if (user?.role === 'super_admin' && selectedAssociationFilter !== 'all') {
+        queryParams.append('association_id', selectedAssociationFilter);
+      }
+      const res = await api.get(`/events?${queryParams.toString()}`);
       const raw = res.data?.data || res.data || [];
       setEvents(Array.isArray(raw) ? raw : []);
     } catch (err) {
@@ -111,7 +133,7 @@ export default function AdminEvents() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [user?.role, selectedAssociationFilter]);
 
   useEffect(() => {
     fetchEvents();
@@ -130,6 +152,7 @@ export default function AdminEvents() {
       event_date: defaultDateStr,
       end_date: '',
       location: 'Association Community Hall / Layout Ground',
+      association_id: selectedAssociationFilter !== 'all' ? selectedAssociationFilter : 'all',
     });
     setIsCreateModalOpen(true);
   };
@@ -167,15 +190,21 @@ export default function AdminEvents() {
 
     try {
       setSubmitting(true);
-      await api.post('/events', {
+      const payload = {
         title: formData.title.trim(),
         description: formData.description.trim(),
         event_date: new Date(formData.event_date).toISOString(),
         end_date: formData.end_date ? new Date(formData.end_date).toISOString() : null,
         location: formData.location.trim(),
-      });
+      };
 
-      toast.success('Event added to community calendar!');
+      if (user?.role === 'super_admin') {
+        payload.association_id = formData.association_id || 'all';
+      }
+
+      const res = await api.post('/events', payload);
+
+      toast.success(res.data?.message || 'Event added to community calendar!');
       setIsCreateModalOpen(false);
       fetchEvents();
     } catch (err) {
@@ -245,13 +274,17 @@ export default function AdminEvents() {
         );
 
         if (!exists) {
-          await api.post('/events', {
+          const festPayload = {
             title: fest.title,
             description: `${fest.description} (${fest.type})`,
             event_date: festDate.toISOString(),
             end_date: null,
             location: 'Community Hall / Layout Grounds',
-          });
+          };
+          if (user?.role === 'super_admin') {
+            festPayload.association_id = selectedAssociationFilter !== 'all' ? selectedAssociationFilter : 'all';
+          }
+          await api.post('/events', festPayload);
           addedCount++;
         }
       }
@@ -314,6 +347,19 @@ export default function AdminEvents() {
         ),
       },
     ];
+
+    if (user?.role === 'super_admin') {
+      baseCols.splice(1, 0, {
+        header: 'Association',
+        accessor: 'association_name',
+        sortable: true,
+        render: (name) => (
+          <span className="inline-flex items-center text-[11px] font-bold text-primary-700 bg-primary-50 px-2.5 py-0.5 rounded border border-primary-200">
+            {name || 'All Associations'}
+          </span>
+        ),
+      });
+    }
 
     if (isAdmin) {
       baseCols.push({
@@ -403,6 +449,26 @@ export default function AdminEvents() {
               <span>Table</span>
             </button>
           </div>
+
+          {/* Super Admin Association Filter */}
+          {user?.role === 'super_admin' && (
+            <div className="flex items-center gap-1.5 bg-gray-50 border border-gray-200 px-3 py-1.5 rounded-xl">
+              <HiBuildingOffice2 className="w-4 h-4 text-primary-600 flex-shrink-0" />
+              <select
+                value={selectedAssociationFilter}
+                onChange={(e) => setSelectedAssociationFilter(e.target.value)}
+                className="text-xs bg-transparent border-0 font-bold text-gray-700 focus:outline-none focus:ring-0 cursor-pointer"
+                title="Filter events by association"
+              >
+                <option value="all">🌐 All Associations (Platform-Wide)</option>
+                {associations.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} ({a.city || 'Tamil Nadu'})
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
 
           {/* Sync Festivals Button (Admins) */}
           {isAdmin && (
@@ -737,6 +803,30 @@ export default function AdminEvents() {
         size="md"
       >
         <form onSubmit={handleCreateEvent} className="space-y-4">
+          {/* Target Association for Super Admin */}
+          {user?.role === 'super_admin' && (
+            <div>
+              <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
+                Target Association *
+              </label>
+              <select
+                value={formData.association_id}
+                onChange={(e) => setFormData({ ...formData, association_id: e.target.value })}
+                className="w-full px-3 py-2 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500 bg-white font-medium"
+              >
+                <option value="all">📢 All Associations (Broadcast to all communities)</option>
+                {associations.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name} ({a.city || 'Tamil Nadu'})
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-gray-500 mt-1">
+                Select "All Associations" to schedule this event across all community layouts.
+              </p>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
               Event / Festival Title *
@@ -834,6 +924,13 @@ export default function AdminEvents() {
         size="md"
       >
         <form onSubmit={handleEditEvent} className="space-y-4">
+          {selectedEvent?.association_name && (
+            <div className="flex items-center gap-1.5 px-3 py-1.5 bg-primary-50 text-primary-700 rounded-lg border border-primary-200 text-xs font-semibold">
+              <HiBuildingOffice2 className="w-3.5 h-3.5" />
+              <span>Association: {selectedEvent.association_name}</span>
+            </div>
+          )}
+
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
               Event Title *
@@ -1012,6 +1109,12 @@ export default function AdminEvents() {
               <span className="text-[10px] font-extrabold uppercase tracking-wider text-primary-700 bg-primary-100/60 px-2.5 py-0.5 rounded-full inline-block">
                 Community Celebration
               </span>
+              {eventToView.association_name && (
+                <div className="flex items-center gap-1.5 text-xs text-primary-700 font-semibold pt-0.5">
+                  <HiBuildingOffice2 className="w-3.5 h-3.5 text-primary-600 flex-shrink-0" />
+                  <span>{eventToView.association_name}</span>
+                </div>
+              )}
               <h3 className="text-base font-extrabold text-gray-900">{eventToView.title}</h3>
               <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 text-xs text-gray-600 pt-1">
                 <span className="flex items-center gap-1.5 font-semibold text-primary-800">

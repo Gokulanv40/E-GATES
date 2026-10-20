@@ -33,7 +33,12 @@ const complaintController = {
       const validPriorities = ['low', 'medium', 'high', 'urgent'];
       const finalPriority = validPriorities.includes(priority) ? priority : 'medium';
 
-      const attachment = req.file ? req.file.path.replace(/\\/g, '/') : null;
+      let attachment = null;
+      if (req.file) {
+        const norm = req.file.path.replace(/\\/g, '/');
+        const uploadIdx = norm.indexOf('/uploads/');
+        attachment = uploadIdx !== -1 ? norm.substring(uploadIdx) : norm;
+      }
 
       const insertQuery = `
         INSERT INTO complaints (
@@ -176,9 +181,18 @@ const complaintController = {
 
       const result = await pool.query(dataQuery, params);
 
+      const rows = result.rows.map((row) => {
+        if (row.attachment) {
+          const norm = row.attachment.replace(/\\/g, '/');
+          const uploadIdx = norm.indexOf('/uploads/');
+          row.attachment = uploadIdx !== -1 ? norm.substring(uploadIdx) : norm;
+        }
+        return row;
+      });
+
       res.json({
         success: true,
-        data: result.rows,
+        data: rows,
         pagination: {
           total,
           page: pageNum,
@@ -218,6 +232,12 @@ const complaintController = {
       }
 
       const complaint = result.rows[0];
+
+      if (complaint.attachment) {
+        const norm = complaint.attachment.replace(/\\/g, '/');
+        const uploadIdx = norm.indexOf('/uploads/');
+        complaint.attachment = uploadIdx !== -1 ? norm.substring(uploadIdx) : norm;
+      }
 
       // Enforce isolation
       if (role === 'member' && complaint.user_id !== userId) {

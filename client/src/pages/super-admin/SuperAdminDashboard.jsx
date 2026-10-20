@@ -259,7 +259,7 @@ export default function SuperAdminDashboard() {
         >
           <div className="flex items-center justify-between">
             <span className="text-xs font-bold uppercase tracking-wider text-amber-600 dark:text-amber-400">
-              {t('nav_approvals') || 'Pending Approvals'}
+              Pending Associations
             </span>
             <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/40 text-amber-600 dark:text-amber-300 flex items-center justify-center">
               <HiShieldExclamation className="w-5 h-5" />
@@ -274,7 +274,7 @@ export default function SuperAdminDashboard() {
             </span>
           </div>
           <p className="mt-2 text-[11px] font-medium text-amber-600 dark:text-amber-400">
-            → {t('review_proofs') || 'Verify EB bill & tax receipts'}
+            → Verify new Association & Main Admin registrations
           </p>
         </div>
 
@@ -599,21 +599,31 @@ export default function SuperAdminDashboard() {
                         </span>
                       </td>
                       <td className="py-3.5 px-4 text-right">
-                        {/* Delete User Button (with confirmation) */}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setDeleteItem({
-                              type: 'user',
-                              id: user.id,
-                              name: `${user.name} (${user.email || user.phone})`,
-                            })
-                          }
-                          className="p-1.5 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
-                          title="Delete User Account"
-                        >
-                          <HiTrash className="w-4 h-4" />
-                        </button>
+                        {user.email === 'superadmin@association.com' || user.member_code === '000001' ? (
+                          <button
+                            type="button"
+                            disabled
+                            className="p-1.5 rounded-lg text-gray-300 dark:text-gray-600 cursor-not-allowed opacity-40 transition"
+                            title="Primary Super Admin account (#000001) cannot be deleted"
+                          >
+                            <HiTrash className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() =>
+                              setDeleteItem({
+                                type: 'user',
+                                id: user.id,
+                                name: `${user.name} (${user.email || user.phone})`,
+                              })
+                            }
+                            className="p-1.5 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
+                            title={user.role === 'super_admin' ? 'Delete Super Admin' : 'Delete User Account'}
+                          >
+                            <HiTrash className="w-4 h-4" />
+                          </button>
+                        )}
                       </td>
                     </tr>
                   ))}

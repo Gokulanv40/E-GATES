@@ -12,13 +12,31 @@ import api from '../../services/api';
 import Modal from '../../components/common/Modal';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
 import { useLanguage } from '../../context/LanguageContext';
+import { useAuth } from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
 
 export default function PendingApprovals() {
   const { t } = useLanguage();
+  const { user: currentUser } = useAuth();
 
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Helper to resolve static file paths to backend URL
+  const resolveFileUrl = (filePath) => {
+    if (!filePath) return '';
+    if (filePath.startsWith('http://') || filePath.startsWith('https://')) return filePath;
+    const base = (import.meta.env.VITE_API_URL || 'http://localhost:5002').replace(/\/api\/v1\/?$/, '');
+    const normalized = filePath.replace(/\\/g, '/');
+    const uploadIndex = normalized.indexOf('/uploads/');
+    if (uploadIndex !== -1) {
+      return `${base}${normalized.substring(uploadIndex)}`;
+    }
+    if (normalized.startsWith('uploads/')) {
+      return `${base}/${normalized}`;
+    }
+    return `${base}/${normalized.replace(/^\/?/, '')}`;
+  };
 
   // Proof Preview Modal
   const [previewProof, setPreviewProof] = useState(null); // { url, title, type }
@@ -39,7 +57,7 @@ export default function PendingApprovals() {
       setData(res.data?.data || []);
     } catch (err) {
       console.warn('Error fetching pending users:', err);
-      toast.error('Failed to load pending registrations');
+      toast.error(err.response?.data?.message || 'Failed to load pending registrations');
     } finally {
       setLoading(false);
     }
@@ -49,10 +67,16 @@ export default function PendingApprovals() {
     fetchPending();
   }, []);
 
-  const handleApprove = async (id, name) => {
+  const handleApprove = async (id, name, userObj) => {
     try {
       await api.put(`/users/${id}/approve`);
-      toast.success(`User "${name}" approved successfully! 6-digit member code generated.`);
+      const isMain = userObj?.is_main_admin || userObj?.display_role === 'Main Association Admin';
+      const roleLabel = isMain
+        ? 'Main Association Admin'
+        : userObj?.role === 'admin'
+        ? 'Layout Admin'
+        : 'Resident Member';
+      toast.success(`${roleLabel} "${name}" approved successfully! They can now log in.`);
       fetchPending();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to approve user');
@@ -100,10 +124,18 @@ export default function PendingApprovals() {
             <span className="p-2 rounded-xl bg-amber-100 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400">
               <HiShieldCheck className="w-6 h-6" />
             </span>
-            <span>{t('nav_approvals') || 'Pending Membership Registrations'}</span>
+            <span>
+              {currentUser?.role === 'super_admin'
+                ? 'Pending Association & Main Admin Registrations'
+                : 'Pending Resident & Admin Registrations'}
+            </span>
           </h1>
           <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mt-1">
-            Review uploaded EB bills, property tax receipts, and verify resident legitimacy.
+            {currentUser?.role === 'super_admin'
+              ? 'Approve or reject new Association registrations and their Main Association Admins. (Regular member & layout admin approvals are managed by the Main Association Admin).'
+              : currentUser?.is_main_admin
+              ? 'Review resident membership and layout administrator applications awaiting your approval as Main Association Admin.'
+              : 'Review uploaded EB bills, property tax receipts, and verify registration legitimacy.'}
           </p>
         </div>
 
@@ -117,12 +149,34 @@ export default function PendingApprovals() {
         </button>
       </div>
 
+      {currentUser?.role === 'super_admin' && (
+        <div className="p-4 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-2xl text-blue-900 dark:text-blue-200 text-xs font-medium flex items-center gap-2.5">
+          <HiShieldCheck className="w-5 h-5 text-blue-600 flex-shrink-0" />
+          <span>
+            <strong>Super Admin Scope:</strong> User (resident member) & layout administrator registration approvals are <strong>canceled for Super Admin</strong>. Super Admin exclusively approves new layout Associations and Main Association Admins. Individual resident & admin approvals are handled directly by each layout's Main Association Admin.
+          </span>
+        </div>
+      )}
+
+      {currentUser?.role === 'admin' && !currentUser?.is_main_admin && (
+        <div className="p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-2xl text-amber-800 dark:text-amber-200 text-xs font-semibold flex items-center gap-2">
+          <HiShieldCheck className="w-5 h-5 text-amber-600 flex-shrink-0" />
+          <span>
+            Approval authority is exclusively granted to the <strong>Main Association Admin</strong> for this layout. Regular administrators do not have approval permissions.
+          </span>
+        </div>
+      )}
+
       {/* Table */}
       <div className="bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-sm overflow-hidden transition-colors">
         <div className="overflow-x-auto">
           {data.length === 0 ? (
             <div className="p-12 text-center text-sm text-gray-500 dark:text-gray-400">
-              {loading ? 'Checking for pending approvals...' : 'All resident registration requests have been reviewed.'}
+              {loading
+                ? 'Checking for pending approvals...'
+                : currentUser?.role === 'super_admin'
+                ? 'No pending Association & Main Association Admin registrations.'
+                : 'All resident member and layout admin registration requests have been reviewed.'}
             </div>
           ) : (
             <table className="w-full text-left text-xs border-collapse">
@@ -166,7 +220,7 @@ export default function PendingApprovals() {
                             type="button"
                             onClick={() =>
                               setPreviewProof({
-                                url: `http://localhost:5002/${user.eb_bill_proof}`,
+                                url: resolveFileUrl(user.eb_bill_proof),
                                 title: `${user.name} - EB Bill Proof`,
                               })
                             }
@@ -184,7 +238,7 @@ export default function PendingApprovals() {
                             type="button"
                             onClick={() =>
                               setPreviewProof({
-                                url: `http://localhost:5002/${user.property_tax_receipt}`,
+                                url: resolveFileUrl(user.property_tax_receipt),
                                 title: `${user.name} - Property Tax Receipt`,
                               })
                             }
@@ -199,16 +253,29 @@ export default function PendingApprovals() {
                       </div>
                     </td>
                     <td className="py-3.5 px-4 text-center">
-                      <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300 capitalize">
-                        {user.role}
-                      </span>
+                      {user.is_main_admin || user.display_role === 'Main Association Admin' ? (
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-800 flex items-center justify-center gap-1 shadow-xs">
+                          <span>🛡️</span>
+                          <span>Main Association Admin</span>
+                        </span>
+                      ) : user.role === 'admin' ? (
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800 flex items-center justify-center gap-1">
+                          <span>🛡️</span>
+                          <span>Layout Admin</span>
+                        </span>
+                      ) : (
+                        <span className="px-2.5 py-1 rounded-full text-[10px] font-bold bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center gap-1">
+                          <span>👥</span>
+                          <span>Resident Member</span>
+                        </span>
+                      )}
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
                         {/* Approve */}
                         <button
                           type="button"
-                          onClick={() => handleApprove(user.id, user.name)}
+                          onClick={() => handleApprove(user.id, user.name, user)}
                           className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-sm"
                         >
                           <HiCheckCircle className="w-3.5 h-3.5" />

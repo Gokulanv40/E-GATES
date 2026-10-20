@@ -294,8 +294,8 @@ export default function AdminDashboard() {
           value={stats.pendingApprovals}
           icon={HiUserPlus}
           variant="yellow"
-          subtitle="Verify applications"
-          onClick={() => navigate('/admin/members')}
+          subtitle={user?.is_main_admin ? "Review & approve" : "Main Admin approval"}
+          onClick={() => navigate(user?.is_main_admin ? '/admin/approvals' : '/admin/users')}
         />
         <StatsCard
           title="Active Polls"
@@ -497,10 +497,10 @@ export default function AdminDashboard() {
               </div>
 
               <button
-                onClick={() => navigate('/admin/members')}
+                onClick={() => navigate('/admin/users')}
                 className="text-xs font-bold text-primary-600 hover:text-primary-800 inline-flex items-center gap-1"
               >
-                Manage &rarr;
+                Manage Users &rarr;
               </button>
             </div>
 
@@ -738,11 +738,11 @@ export default function AdminDashboard() {
             <button
               onClick={() => {
                 setActiveDrilldown(null);
-                navigate('/admin/members');
+                navigate('/admin/users');
               }}
               className="text-xs font-bold text-primary-600 hover:text-primary-800 inline-flex items-center gap-1"
             >
-              Open Full Members Page <HiArrowRight className="w-3.5 h-3.5" />
+              Open Manage Users <HiArrowRight className="w-3.5 h-3.5" />
             </button>
           </div>
 

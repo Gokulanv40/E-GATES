@@ -45,3 +45,6 @@ Thumbs.db
 
 # Antigravity / Gemini files
 .gemini/
+
+# Scratch & temporary scripts
+scratch/

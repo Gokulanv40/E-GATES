@@ -57,9 +57,14 @@ const userController = {
    */
   async getPending(req, res, next) {
     try {
-      const { role, association_id: userAssocId } = req.user;
+      const { role, is_main_admin, association_id: userAssocId } = req.user;
       let queryText = `
-        SELECT u.id, u.name, u.email, u.phone, u.role, u.association_id,
+        SELECT u.id, u.name, u.email, u.phone, u.role, u.is_main_admin, u.association_id, u.profile_photo,
+               CASE
+                 WHEN u.is_main_admin = true THEN 'Main Association Admin'
+                 WHEN u.role = 'admin' THEN 'Layout Admin'
+                 ELSE 'Resident Member'
+               END as display_role,
                u.door_no, u.street, u.layout_name, u.taluk, u.district, u.state,
                u.eb_bill_proof, u.property_tax_receipt, u.status, u.created_at,
                a.name as association_name
@@ -70,14 +75,23 @@ const userController = {
       const queryParams = [];
 
       if (role === 'super_admin') {
+        // Super Admin only approves new Association & Main Association Admin registrations
+        // Regular user and layout admin registration approvals are canceled for superadmin
+        queryText += ' AND u.is_main_admin = true';
         if (req.query.association_id) {
           queryParams.push(req.query.association_id);
           queryText += ` AND u.association_id = $${queryParams.length}`;
         }
       } else {
-        // Admin sees own association only
+        // Main Association Admin approves resident members and layout admins
+        if (!is_main_admin) {
+          return res.status(403).json({
+            success: false,
+            message: 'Permission denied. Only the Main Association Admin has authority to review and approve registrations.'
+          });
+        }
         queryParams.push(userAssocId);
-        queryText += ` AND u.association_id = $${queryParams.length}`;
+        queryText += ` AND u.association_id = $${queryParams.length} AND (u.is_main_admin IS NOT TRUE OR u.is_main_admin = false)`;
       }
 
       queryText += ' ORDER BY u.created_at ASC';
@@ -99,11 +113,11 @@ const userController = {
   async approve(req, res, next) {
     try {
       const userId = parseInt(req.params.id, 10);
-      const { role, association_id: adminAssocId } = req.user;
+      const { role, is_main_admin, association_id: adminAssocId } = req.user;
 
       // Check user exists
       const userCheck = await pool.query(
-        'SELECT id, name, email, phone, role, association_id, status FROM users WHERE id = $1',
+        'SELECT id, name, email, phone, role, is_main_admin, association_id, status FROM users WHERE id = $1',
         [userId]
       );
 
@@ -116,12 +130,37 @@ const userController = {
 
       const targetUser = userCheck.rows[0];
 
-      // Association isolation check for Admin
-      if (role !== 'super_admin' && targetUser.association_id !== adminAssocId) {
-        return res.status(403).json({
-          success: false,
-          message: 'You can only approve users within your own association'
-        });
+      // Permission check:
+      // Super Admin: only approves new Association & Main Association Admin registrations
+      // Regular user & layout admin registration approvals are canceled for Super Admin
+      if (role === 'super_admin') {
+        if (!targetUser.is_main_admin) {
+          return res.status(403).json({
+            success: false,
+            message: 'Approval canceled for Super Admin. Resident member and layout administrator registrations must be approved by the Main Association Admin.'
+          });
+        }
+      } else {
+        if (!is_main_admin) {
+          return res.status(403).json({
+            success: false,
+            message: 'Permission denied. Only the Main Association Admin has authority to approve registrations.'
+          });
+        }
+
+        if (targetUser.association_id !== adminAssocId) {
+          return res.status(403).json({
+            success: false,
+            message: 'You can only approve users within your own layout association.'
+          });
+        }
+
+        if (targetUser.is_main_admin) {
+          return res.status(403).json({
+            success: false,
+            message: 'Only the Super Administrator has authority to approve a Main Association Admin account.'
+          });
+        }
       }
 
       if (targetUser.status === 'approved') {
@@ -148,13 +187,21 @@ const userController = {
 
       const approvedUser = updateResult.rows[0];
 
+      // If approved user has an association, ensure association is active
+      if (approvedUser.association_id) {
+        await pool.query(
+          'UPDATE associations SET is_active = true WHERE id = $1',
+          [approvedUser.association_id]
+        );
+      }
+
       // Audit log
       await logAudit(
         req.user.id,
         'USER_APPROVE',
         'users',
         userId,
-        { memberCode, approvedBy: req.user.id },
+        { memberCode, approvedBy: req.user.id, role: approvedUser.role },
         req.ip
       );
 
@@ -227,13 +274,13 @@ const userController = {
   async reject(req, res, next) {
     try {
       const userId = parseInt(req.params.id, 10);
-      const { role, association_id: adminAssocId } = req.user;
+      const { role, is_main_admin, association_id: adminAssocId } = req.user;
       const { rejection_reason, reason } = req.body;
       const finalReason = (rejection_reason || reason || 'Registration details did not meet association requirements.').trim();
 
       // Check user exists
       const userCheck = await pool.query(
-        'SELECT id, name, email, phone, role, association_id, status FROM users WHERE id = $1',
+        'SELECT id, name, email, phone, role, is_main_admin, association_id, status FROM users WHERE id = $1',
         [userId]
       );
 
@@ -246,12 +293,37 @@ const userController = {
 
       const targetUser = userCheck.rows[0];
 
-      // Association isolation check
-      if (role !== 'super_admin' && targetUser.association_id !== adminAssocId) {
-        return res.status(403).json({
-          success: false,
-          message: 'You can only reject users within your own association'
-        });
+      // Permission check:
+      // Super Admin: only reviews new Association & Main Association Admin registrations
+      // Regular user & layout admin registration rejections are canceled for Super Admin
+      if (role === 'super_admin') {
+        if (!targetUser.is_main_admin) {
+          return res.status(403).json({
+            success: false,
+            message: 'Rejection canceled for Super Admin. Resident member and layout administrator registrations must be reviewed by the Main Association Admin.'
+          });
+        }
+      } else {
+        if (!is_main_admin) {
+          return res.status(403).json({
+            success: false,
+            message: 'Permission denied. Only the Main Association Admin has authority to reject registrations.'
+          });
+        }
+
+        if (targetUser.association_id !== adminAssocId) {
+          return res.status(403).json({
+            success: false,
+            message: 'You can only reject users within your own layout association.'
+          });
+        }
+
+        if (targetUser.is_main_admin) {
+          return res.status(403).json({
+            success: false,
+            message: 'Only the Super Administrator has authority to reject a Main Association Admin registration.'
+          });
+        }
       }
 
       const updateResult = await pool.query(
@@ -402,7 +474,13 @@ const userController = {
       const offsetIdx = queryParams.length;
 
       const dataQuery = `
-        SELECT u.id, u.name, u.email, u.phone, u.role, u.association_id,
+        SELECT u.id, u.name, u.email, u.phone, u.role, u.is_main_admin, u.association_id, u.profile_photo,
+               CASE
+                 WHEN u.is_main_admin = true THEN 'Main Association Admin'
+                 WHEN u.role = 'admin' THEN 'Layout Admin'
+                 WHEN u.role = 'super_admin' THEN 'Super Admin'
+                 ELSE 'Resident Member'
+               END as display_role,
                u.member_code, u.door_no, u.street, u.layout_name, u.taluk,
                u.district, u.state, u.eb_bill_proof, u.property_tax_receipt,
                u.status, u.language, u.created_at, u.updated_at,
@@ -440,7 +518,13 @@ const userController = {
       const { id: requesterId, role: requesterRole, association_id: requesterAssocId } = req.user;
 
       const query = `
-        SELECT u.id, u.name, u.email, u.phone, u.role, u.association_id,
+        SELECT u.id, u.name, u.email, u.phone, u.role, u.is_main_admin, u.association_id, u.profile_photo,
+               CASE
+                 WHEN u.is_main_admin = true THEN 'Main Association Admin'
+                 WHEN u.role = 'admin' THEN 'Layout Admin'
+                 WHEN u.role = 'super_admin' THEN 'Super Admin'
+                 ELSE 'Resident Member'
+               END as display_role,
                u.member_code, u.door_no, u.street, u.layout_name, u.taluk,
                u.district, u.state, u.eb_bill_proof, u.property_tax_receipt,
                u.status, u.rejection_reason, u.language, u.created_at, u.updated_at,
@@ -520,7 +604,9 @@ const userController = {
 
       const {
         name,
+        email,
         phone,
+        password,
         door_no,
         street,
         layout_name,
@@ -530,6 +616,29 @@ const userController = {
         language,
         role: updatedRole
       } = req.body;
+
+      // Check email uniqueness if changed
+      let emailToSave = null;
+      if (email && email.trim().toLowerCase() !== existingUser.email) {
+        const emailCheck = await pool.query('SELECT id FROM users WHERE email = $1 AND id != $2', [
+          email.trim().toLowerCase(),
+          targetId
+        ]);
+        if (emailCheck.rows.length > 0) {
+          return res.status(400).json({
+            success: false,
+            message: 'Email address already in use by another account'
+          });
+        }
+        emailToSave = email.trim().toLowerCase();
+      }
+
+      // Hash password if provided
+      let passwordHashToSave = null;
+      if (password && password.trim().length >= 6) {
+        const salt = await bcrypt.genSalt(10);
+        passwordHashToSave = await bcrypt.hash(password.trim(), salt);
+      }
 
       // Role change restriction: only super_admin can change user role
       let roleToSave = existingUser.role;
@@ -552,31 +661,47 @@ const userController = {
         ? req.files.property_tax_receipt[0].path.replace(/\\/g, '/')
         : null;
 
+      // Handle profile photo / avatar upload if provided
+      let profilePhoto = null;
+      if (req.files) {
+        const photoFile = (req.files.profile_photo && req.files.profile_photo[0]) || (req.files.avatar && req.files.avatar[0]);
+        if (photoFile) {
+          profilePhoto = photoFile.path.replace(/\\/g, '/');
+          const idx = profilePhoto.indexOf('/uploads/');
+          if (idx !== -1) profilePhoto = profilePhoto.substring(idx);
+        }
+      }
+
       const updateQuery = `
         UPDATE users
         SET name = COALESCE($1, name),
-            phone = COALESCE($2, phone),
-            door_no = COALESCE($3, door_no),
-            street = COALESCE($4, street),
-            layout_name = COALESCE($5, layout_name),
-            taluk = COALESCE($6, taluk),
-            district = COALESCE($7, district),
-            state = COALESCE($8, state),
-            language = COALESCE($9, language),
-            role = $10,
-            eb_bill_proof = COALESCE($11, eb_bill_proof),
-            property_tax_receipt = COALESCE($12, property_tax_receipt),
+            email = COALESCE($2, email),
+            phone = COALESCE($3, phone),
+            password_hash = COALESCE($4, password_hash),
+            door_no = COALESCE($5, door_no),
+            street = COALESCE($6, street),
+            layout_name = COALESCE($7, layout_name),
+            taluk = COALESCE($8, taluk),
+            district = COALESCE($9, district),
+            state = COALESCE($10, state),
+            language = COALESCE($11, language),
+            role = $12,
+            eb_bill_proof = COALESCE($13, eb_bill_proof),
+            property_tax_receipt = COALESCE($14, property_tax_receipt),
+            profile_photo = COALESCE($15, profile_photo),
             updated_at = NOW()
-        WHERE id = $13
-        RETURNING id, name, email, phone, role, association_id, member_code,
+        WHERE id = $16
+        RETURNING id, name, email, phone, role, is_main_admin, association_id, member_code,
                   door_no, street, layout_name, taluk, district, state,
-                  eb_bill_proof, property_tax_receipt, created_at,
+                  eb_bill_proof, property_tax_receipt, profile_photo, created_at,
                   language, status, updated_at
       `;
 
       const values = [
         name ? name.trim() : null,
+        emailToSave,
         phone ? phone.trim() : null,
+        passwordHashToSave,
         door_no ? door_no.trim() : null,
         street ? street.trim() : null,
         layout_name ? layout_name.trim() : null,
@@ -587,6 +712,7 @@ const userController = {
         roleToSave,
         ebBillProof,
         propertyTaxReceipt,
+        profilePhoto,
         targetId
       ];
 
@@ -618,9 +744,9 @@ const userController = {
   async remove(req, res, next) {
     try {
       const targetId = parseInt(req.params.id, 10);
-      const { id: requesterId, role: requesterRole, association_id: requesterAssocId } = req.user;
+      const { id: requesterId, role: requesterRole, is_main_admin, association_id: requesterAssocId } = req.user;
 
-      const userCheck = await pool.query('SELECT id, association_id, role FROM users WHERE id = $1', [targetId]);
+      const userCheck = await pool.query('SELECT id, association_id, role, is_main_admin, email, member_code FROM users WHERE id = $1', [targetId]);
       if (userCheck.rows.length === 0) {
         return res.status(404).json({
           success: false,
@@ -630,18 +756,46 @@ const userController = {
 
       const target = userCheck.rows[0];
 
-      if (target.role === 'super_admin' && (requesterRole !== 'super_admin' || target.id === requesterId)) {
+      // Protect Primary / Root Super Admin (#000001 or superadmin@association.com)
+      if (
+        target.role === 'super_admin' &&
+        (target.email === 'superadmin@association.com' || target.member_code === '000001')
+      ) {
         return res.status(403).json({
           success: false,
-          message: target.id === requesterId ? 'Cannot delete your own super admin account' : 'Cannot delete super admin account'
+          message: 'Primary Super Administrator account cannot be deleted.'
         });
       }
 
-      if (requesterRole !== 'super_admin' && target.association_id !== requesterAssocId) {
+      // Prevent user from deleting their own account
+      if (target.id === requesterId) {
         return res.status(403).json({
           success: false,
-          message: 'Cannot delete users outside your association'
+          message: 'You cannot delete your own account.'
         });
+      }
+
+      if (requesterRole !== 'super_admin') {
+        if (!is_main_admin) {
+          return res.status(403).json({
+            success: false,
+            message: 'Permission denied. Only the Main Association Admin has authority to remove users.'
+          });
+        }
+
+        if (target.association_id !== requesterAssocId) {
+          return res.status(403).json({
+            success: false,
+            message: 'Cannot delete users outside your association'
+          });
+        }
+
+        if (target.is_main_admin) {
+          return res.status(403).json({
+            success: false,
+            message: 'Only the Super Administrator has authority to delete a Main Association Admin account.'
+          });
+        }
       }
 
       await pool.query('DELETE FROM users WHERE id = $1', [targetId]);
@@ -720,6 +874,275 @@ const userController = {
         success: true,
         message: 'Super Admin created successfully',
         data: newAdmin
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * Create an association admin
+   * Super Admin or Main Association Admin
+   */
+  async createAdmin(req, res, next) {
+    try {
+      const {
+        name,
+        email,
+        phone,
+        password,
+        door_no,
+        street,
+        layout_name,
+        taluk,
+        district,
+        state
+      } = req.body;
+
+      const targetAssocId = req.user.role === 'admin'
+        ? req.user.association_id
+        : (req.body.association_id ? parseInt(req.body.association_id, 10) : req.user.association_id);
+
+      if (req.user.role === 'admin' && !req.user.is_main_admin) {
+        return res.status(403).json({
+          success: false,
+          message: 'Permission denied. Only the Main Association Admin has authority to add administrators.'
+        });
+      }
+
+      if (!name || !email || !password || !targetAssocId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Name, email, password, and association are required'
+        });
+      }
+
+      // Verify association exists
+      const assocCheck = await pool.query('SELECT id, name, main_admin_id FROM associations WHERE id = $1', [targetAssocId]);
+      if (assocCheck.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Selected association does not exist'
+        });
+      }
+
+      // Check email uniqueness
+      const existing = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [email.trim().toLowerCase()]);
+      if (existing.rows.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'A user with this email already exists'
+        });
+      }
+
+      // Handle uploaded files
+      const ebBillProof = req.files && req.files.eb_bill_proof && req.files.eb_bill_proof[0]
+        ? req.files.eb_bill_proof[0].path.replace(/\\/g, '/')
+        : null;
+
+      const propertyTaxReceipt = req.files && req.files.property_tax_receipt && req.files.property_tax_receipt[0]
+        ? req.files.property_tax_receipt[0].path.replace(/\\/g, '/')
+        : null;
+
+      const salt = await bcrypt.genSalt(10);
+      const passwordHash = await bcrypt.hash(password, salt);
+      const memberCode = await getUniqueMemberCode();
+
+      // If created by Main Admin, isMainAdmin is always false (Layout Admin)
+      const isMainAdmin = req.user.role === 'super_admin'
+        ? (req.body.is_main_admin === true || req.body.is_main_admin === 'true' || !assocCheck.rows[0].main_admin_id)
+        : false;
+
+      const insertQuery = `
+        INSERT INTO users (
+          name, email, phone, password_hash, role, is_main_admin, association_id, status, member_code,
+          door_no, street, layout_name, taluk, district, state,
+          eb_bill_proof, property_tax_receipt
+        ) VALUES (
+          $1, $2, $3, $4, 'admin', $5, $6, 'approved', $7,
+          $8, $9, $10, $11, $12, $13,
+          $14, $15
+        )
+        RETURNING id, name, email, phone, role, is_main_admin, association_id, status, member_code,
+                  door_no, street, layout_name, taluk, district, state,
+                  eb_bill_proof, property_tax_receipt, created_at
+      `;
+      const result = await pool.query(insertQuery, [
+        name.trim(),
+        email.trim().toLowerCase(),
+        phone ? phone.trim() : null,
+        passwordHash,
+        isMainAdmin,
+        targetAssocId,
+        memberCode,
+        door_no ? door_no.trim() : null,
+        street ? street.trim() : null,
+        layout_name ? layout_name.trim() : (assocCheck.rows[0].name || null),
+        taluk ? taluk.trim() : null,
+        district ? district.trim() : null,
+        state ? state.trim() : 'Tamil Nadu',
+        ebBillProof,
+        propertyTaxReceipt
+      ]);
+
+      const newAdmin = result.rows[0];
+
+      if (isMainAdmin) {
+        await pool.query('UPDATE associations SET main_admin_id = $1 WHERE id = $2', [
+          newAdmin.id,
+          targetAssocId
+        ]);
+      }
+
+      await logAudit(
+        req.user.id,
+        'ADMIN_CREATE',
+        'users',
+        newAdmin.id,
+        { email: newAdmin.email, name: newAdmin.name, association_id: newAdmin.association_id },
+        req.ip
+      );
+
+      res.status(201).json({
+        success: true,
+        message: `Layout Administrator "${newAdmin.name}" created and approved successfully!`,
+        data: newAdmin
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * Create a resident member manually
+   * Super Admin or Main Association Admin
+   */
+  async createMember(req, res, next) {
+    try {
+      const {
+        name,
+        email,
+        phone,
+        password,
+        door_no,
+        street,
+        layout_name,
+        taluk,
+        district,
+        state,
+        language = 'en'
+      } = req.body;
+
+      const targetAssocId = req.user.role === 'admin' 
+        ? req.user.association_id 
+        : (req.body.association_id ? parseInt(req.body.association_id, 10) : req.user.association_id);
+
+      if (req.user.role === 'admin' && !req.user.is_main_admin) {
+        return res.status(403).json({
+          success: false,
+          message: 'Permission denied. Only the Main Association Admin has authority to add members.'
+        });
+      }
+
+      if (!name || !email || !password || !targetAssocId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Name, email, password, and layout association are required'
+        });
+      }
+
+      // Check association exists
+      const assocCheck = await pool.query('SELECT id, name FROM associations WHERE id = $1', [targetAssocId]);
+      if (assocCheck.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Selected association does not exist'
+        });
+      }
+
+      // Check email uniqueness
+      const existing = await pool.query('SELECT id FROM users WHERE LOWER(email) = LOWER($1)', [email.trim().toLowerCase()]);
+      if (existing.rows.length > 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'A user with this email already exists'
+        });
+      }
+
+      // Check duplicate door_no within same association if door_no is provided
+      if (door_no) {
+        const duplicateDoor = await pool.query(
+          'SELECT id FROM users WHERE door_no = $1 AND association_id = $2',
+          [door_no.trim(), targetAssocId]
+        );
+        if (duplicateDoor.rows.length > 0) {
+          return res.status(409).json({
+            success: false,
+            message: `Door number "${door_no}" is already registered in this association`
+          });
+        }
+      }
+
+      // Handle uploaded files
+      const ebBillProof = req.files && req.files.eb_bill_proof && req.files.eb_bill_proof[0]
+        ? req.files.eb_bill_proof[0].path.replace(/\\/g, '/')
+        : null;
+
+      const propertyTaxReceipt = req.files && req.files.property_tax_receipt && req.files.property_tax_receipt[0]
+        ? req.files.property_tax_receipt[0].path.replace(/\\/g, '/')
+        : null;
+
+      const salt = await bcrypt.genSalt(10);
+      const passwordHash = await bcrypt.hash(password, salt);
+      const memberCode = await getUniqueMemberCode();
+
+      const insertQuery = `
+        INSERT INTO users (
+          name, email, phone, password_hash, role, is_main_admin, association_id, status, member_code,
+          door_no, street, layout_name, taluk, district, state,
+          eb_bill_proof, property_tax_receipt, language
+        ) VALUES (
+          $1, $2, $3, $4, 'member', false, $5, 'approved', $6,
+          $7, $8, $9, $10, $11, $12,
+          $13, $14, $15
+        )
+        RETURNING id, name, email, phone, role, is_main_admin, association_id, status, member_code,
+                  door_no, street, layout_name, taluk, district, state,
+                  eb_bill_proof, property_tax_receipt, created_at
+      `;
+      const result = await pool.query(insertQuery, [
+        name.trim(),
+        email.trim().toLowerCase(),
+        phone ? phone.trim() : null,
+        passwordHash,
+        targetAssocId,
+        memberCode,
+        door_no ? door_no.trim() : null,
+        street ? street.trim() : null,
+        layout_name ? layout_name.trim() : (assocCheck.rows[0].name || null),
+        taluk ? taluk.trim() : null,
+        district ? district.trim() : null,
+        state ? state.trim() : 'Tamil Nadu',
+        ebBillProof,
+        propertyTaxReceipt,
+        language
+      ]);
+
+      const newMember = result.rows[0];
+
+      await logAudit(
+        req.user.id,
+        'MEMBER_MANUAL_CREATE',
+        'users',
+        newMember.id,
+        { email: newMember.email, name: newMember.name, association_id: newMember.association_id, memberCode },
+        req.ip
+      );
+
+      res.status(201).json({
+        success: true,
+        message: `Resident Member "${newMember.name}" created and approved successfully!`,
+        data: newMember
       });
     } catch (error) {
       next(error);

@@ -123,12 +123,14 @@ const associationController = {
       const { search, is_active } = req.query;
 
       let queryText = `
-        SELECT a.id, a.name, a.city, a.address, a.logo, a.is_active, a.created_at,
+        SELECT a.id, a.name, a.city, a.address, a.logo, a.is_active, a.main_admin_id, a.created_at,
                COUNT(DISTINCT u.id) FILTER (WHERE u.status = 'approved' AND u.role = 'member') as member_count,
                COUNT(DISTINCT adm.id) as admin_count,
+               COALESCE(main_adm.name, (SELECT name FROM users WHERE association_id = a.id AND is_main_admin = true LIMIT 1), 'None Assigned') as main_admin_name,
                COALESCE(STRING_AGG(DISTINCT adm.name, ', '), 'None Assigned') as admin_names
         FROM associations a
         LEFT JOIN users u ON u.association_id = a.id
+        LEFT JOIN users main_adm ON main_adm.id = a.main_admin_id
         LEFT JOIN users adm ON adm.association_id = a.id AND adm.role = 'admin' AND adm.status = 'approved'
       `;
 
@@ -151,7 +153,7 @@ const associationController = {
         queryText += ` WHERE ${conditions.join(' AND ')}`;
       }
 
-      queryText += ' GROUP BY a.id ORDER BY a.name ASC';
+      queryText += ' GROUP BY a.id, main_adm.name ORDER BY a.name ASC';
 
       const result = await pool.query(queryText, params);
 
@@ -209,12 +211,22 @@ const associationController = {
 
   /**
    * Update association details and logo
-   * Super Admin only
+   * Super Admin or Association Admin (for their own association)
    */
   async update(req, res, next) {
     try {
       const assocId = parseInt(req.params.id, 10);
       const { name, city, address, is_active } = req.body;
+
+      // Check permission: super_admin or admin of this association
+      if (req.user.role !== 'super_admin') {
+        if (req.user.role !== 'admin' || req.user.association_id !== assocId) {
+          return res.status(403).json({
+            success: false,
+            message: 'You are not authorized to update this association'
+          });
+        }
+      }
 
       // Check existence
       const check = await pool.query('SELECT * FROM associations WHERE id = $1', [assocId]);
@@ -226,8 +238,17 @@ const associationController = {
       }
 
       const current = check.rows[0];
-      const logo = req.file ? req.file.path.replace(/\\/g, '/') : current.logo;
-      const activeState = is_active !== undefined ? is_active === 'true' || is_active === true : current.is_active;
+      let logo = current.logo;
+      if (req.file) {
+        logo = req.file.path.replace(/\\/g, '/');
+        const idx = logo.indexOf('/uploads/');
+        if (idx !== -1) logo = logo.substring(idx);
+      }
+
+      // Only super_admin can change is_active status
+      const activeState = (req.user.role === 'super_admin' && is_active !== undefined)
+        ? (is_active === 'true' || is_active === true)
+        : current.is_active;
 
       const updateResult = await pool.query(
         `UPDATE associations
@@ -322,7 +343,7 @@ const associationController = {
   async assignAdmin(req, res, next) {
     try {
       const assocId = parseInt(req.params.id, 10);
-      const { user_id } = req.body;
+      const { user_id, role = 'admin', action } = req.body;
 
       if (!user_id) {
         return res.status(400).json({
@@ -339,7 +360,7 @@ const associationController = {
         });
       }
 
-      const userCheck = await pool.query('SELECT id, name, email FROM users WHERE id = $1', [user_id]);
+      const userCheck = await pool.query('SELECT id, name, email, role FROM users WHERE id = $1', [user_id]);
       if (userCheck.rows.length === 0) {
         return res.status(404).json({
           success: false,
@@ -347,46 +368,79 @@ const associationController = {
         });
       }
 
+      const isRemoving = action === 'remove_admin' || role === 'member';
+      const targetRole = isRemoving ? 'member' : 'admin';
+
       const updateResult = await pool.query(
         `UPDATE users
-         SET role = 'admin',
-             association_id = $1,
+         SET role = $1,
+             association_id = $2,
              status = 'approved',
              updated_at = NOW()
-         WHERE id = $2
+         WHERE id = $3
          RETURNING id, name, email, phone, role, association_id, status`,
-        [assocId, user_id]
+        [targetRole, assocId, user_id]
       );
 
       const updatedUser = updateResult.rows[0];
 
-      await logAudit(
-        req.user.id,
-        'ASSIGN_ASSOCIATION_ADMIN',
-        'users',
-        user_id,
-        { association_id: assocId },
-        req.ip
-      );
-
-      // Send notification to user
-      await pool.query(
-        `INSERT INTO notifications (user_id, title, message, type, link)
-         VALUES ($1, $2, $3, $4, $5)`,
-        [
+      if (isRemoving) {
+        await logAudit(
+          req.user.id,
+          'REMOVE_ASSOCIATION_ADMIN',
+          'users',
           user_id,
-          'Admin Role Assigned',
-          `You have been designated as an Administrator for ${assocCheck.rows[0].name}.`,
-          'info',
-          '/admin/dashboard'
-        ]
-      );
+          { association_id: assocId, previous_role: userCheck.rows[0].role, new_role: 'member' },
+          req.ip
+        );
 
-      res.json({
-        success: true,
-        message: 'Admin assigned successfully',
-        data: updatedUser
-      });
+        // Send notification to user
+        await pool.query(
+          `INSERT INTO notifications (user_id, title, message, type, link)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            user_id,
+            'Admin Privileges Removed',
+            `Your administrative role for ${assocCheck.rows[0].name} has been revoked. You are now designated as a Resident Member.`,
+            'info',
+            '/member/dashboard'
+          ]
+        );
+
+        return res.json({
+          success: true,
+          message: `Admin privileges removed for ${updatedUser.name}. User is now a Resident Member.`,
+          data: updatedUser
+        });
+      } else {
+        await logAudit(
+          req.user.id,
+          'ASSIGN_ASSOCIATION_ADMIN',
+          'users',
+          user_id,
+          { association_id: assocId, new_role: 'admin' },
+          req.ip
+        );
+
+        // Send notification to user
+        await pool.query(
+          `INSERT INTO notifications (user_id, title, message, type, link)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            user_id,
+            'Admin Role Assigned',
+            `You have been designated as an Administrator for ${assocCheck.rows[0].name}.`,
+            'info',
+            '/admin/dashboard'
+          ]
+        );
+
+        return res.json({
+          success: true,
+          message: `Admin assigned successfully for ${assocCheck.rows[0].name}`,
+          data: updatedUser
+        });
+      }
     } catch (error) {
       next(error);
     }

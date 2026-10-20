@@ -23,6 +23,7 @@ const AuditLog = lazy(() => import('./pages/super-admin/AuditLog'));
 
 // Admin Pages
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
+const AdminManageUsers = lazy(() => import('./pages/admin/ManageUsers'));
 const Members = lazy(() => import('./pages/admin/Members'));
 const SOSContacts = lazy(() => import('./pages/admin/SOSContacts'));
 const SOSAlerts = lazy(() => import('./pages/admin/SOSAlerts'));
@@ -113,9 +114,11 @@ export default function App() {
           <Route path="associations" element={<Associations />} />
           <Route path="approvals" element={<PendingApprovals />} />
           <Route path="users" element={<ManageUsers />} />
+          <Route path="events" element={<Events />} />
           <Route path="polls" element={<PollResults />} />
           <Route path="sos-reports" element={<SOSReports />} />
           <Route path="audit-log" element={<AuditLog />} />
+          <Route path="profile" element={<Profile />} />
           <Route path="*" element={<Navigate to="dashboard" replace />} />
         </Route>
 
@@ -132,6 +135,8 @@ export default function App() {
         >
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<AdminDashboard />} />
+          <Route path="approvals" element={<PendingApprovals />} />
+          <Route path="users" element={<AdminManageUsers />} />
           <Route path="members" element={<Members />} />
           <Route path="sos-contacts" element={<SOSContacts />} />
           <Route path="sos-alerts" element={<SOSAlerts />} />

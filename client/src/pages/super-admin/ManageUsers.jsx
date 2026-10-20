@@ -3,6 +3,7 @@ import {
   HiUsers,
   HiUserPlus,
   HiTrash,
+  HiPencilSquare,
   HiFunnel,
   HiMagnifyingGlass,
   HiShieldCheck,
@@ -33,9 +34,36 @@ export default function ManageUsers() {
   const [newAdmin, setNewAdmin] = useState({ name: '', email: '', phone: '', password: '' });
   const [isSubmittingAdmin, setIsSubmittingAdmin] = useState(false);
 
+  // Edit User / Super Admin Modal
+  const [editUser, setEditUser] = useState(null);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    email: '',
+    phone: '',
+    password: '',
+    door_no: '',
+    street: '',
+  });
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
+
   // Delete User Confirmation
   const [deleteUser, setDeleteUser] = useState(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  const resolveFileUrl = (filePath) => {
+    if (!filePath) return '';
+    if (filePath.startsWith('http://') || filePath.startsWith('https://')) return filePath;
+    const base = (import.meta.env.VITE_API_URL || 'http://localhost:5002').replace(/\/api\/v1\/?$/, '');
+    const normalized = filePath.replace(/\\/g, '/');
+    const uploadIndex = normalized.indexOf('/uploads/');
+    if (uploadIndex !== -1) {
+      return `${base}${normalized.substring(uploadIndex)}`;
+    }
+    if (normalized.startsWith('uploads/')) {
+      return `${base}/${normalized}`;
+    }
+    return `${base}/${normalized.replace(/^\/?/, '')}`;
+  };
 
   const fetchData = async () => {
     try {
@@ -62,7 +90,13 @@ export default function ManageUsers() {
   const filteredUsers = users.filter((u) => {
     const matchesAssoc =
       selectedAssocId === 'all' || String(u.association_id) === String(selectedAssocId);
-    const matchesRole = selectedRole === 'all' || u.role === selectedRole;
+    const matchesRole =
+      selectedRole === 'all' ||
+      (selectedRole === 'main_admin'
+        ? Boolean(u.is_main_admin || u.display_role === 'Main Association Admin')
+        : selectedRole === 'admin'
+        ? u.role === 'admin' && !u.is_main_admin && u.display_role !== 'Main Association Admin'
+        : u.role === selectedRole);
     const matchesSearch =
       !searchTerm ||
       u.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -91,6 +125,71 @@ export default function ManageUsers() {
       toast.error(err.response?.data?.message || 'Failed to create Super Admin');
     } finally {
       setIsSubmittingAdmin(false);
+    }
+  };
+
+  // Password strength calculation helper
+  const getPasswordStrength = (pwd) => {
+    if (!pwd) return { score: 0, label: '', color: 'bg-gray-200' };
+    let score = 0;
+    if (pwd.length >= 8) score += 1;
+    if (/[A-Z]/.test(pwd)) score += 1;
+    if (/[0-9]/.test(pwd)) score += 1;
+    if (/[^A-Za-z0-9]/.test(pwd)) score += 1;
+
+    if (score <= 1) return { score: 25, label: 'Weak', color: 'bg-red-500' };
+    if (score === 2) return { score: 50, label: 'Fair', color: 'bg-yellow-500' };
+    if (score === 3) return { score: 75, label: 'Good', color: 'bg-blue-500' };
+    return { score: 100, label: 'Strong', color: 'bg-green-500' };
+  };
+
+
+
+  // Handle Edit User
+  const handleOpenEdit = (user) => {
+    setEditUser(user);
+    setEditForm({
+      name: user.name || '',
+      email: user.email || '',
+      phone: user.phone || '',
+      password: '',
+      door_no: user.door_no || '',
+      street: user.street || '',
+    });
+  };
+
+  const handleSaveEdit = async (e) => {
+    e.preventDefault();
+    if (!editUser) return;
+    if (!editForm.name.trim() || !editForm.email.trim()) {
+      toast.error('Name and email are required');
+      return;
+    }
+    try {
+      setIsSavingEdit(true);
+      const payload = {
+        name: editForm.name.trim(),
+        email: editForm.email.trim().toLowerCase(),
+        phone: editForm.phone.trim(),
+        door_no: editForm.door_no.trim(),
+        street: editForm.street.trim(),
+      };
+      if (editForm.password && editForm.password.trim()) {
+        if (editForm.password.trim().length < 6) {
+          toast.error('Password must be at least 6 characters long');
+          setIsSavingEdit(false);
+          return;
+        }
+        payload.password = editForm.password.trim();
+      }
+      await api.put(`/users/${editUser.id}`, payload);
+      toast.success(`${editUser.role === 'super_admin' ? 'Super Admin' : 'User'} "${editForm.name}" updated successfully!`);
+      setEditUser(null);
+      fetchData();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update user');
+    } finally {
+      setIsSavingEdit(false);
     }
   };
 
@@ -140,7 +239,7 @@ export default function ManageUsers() {
             className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs sm:text-sm shadow-md shadow-purple-600/20 flex items-center gap-2 transition"
           >
             <HiUserPlus className="w-4 h-4" />
-            <span>{t('create_superadmin') || '+ Create Another Super Admin'}</span>
+            <span>{t('create_superadmin') || '+ Super Admin'}</span>
           </button>
         </div>
       </div>
@@ -175,7 +274,7 @@ export default function ManageUsers() {
           >
             <option value="all">All Roles</option>
             <option value="super_admin">Super Admins</option>
-            <option value="admin">Layout Admins</option>
+            <option value="admin">Main Association Admins</option>
             <option value="member">Residents (Members)</option>
           </select>
         </div>
@@ -224,8 +323,24 @@ export default function ManageUsers() {
                       {user.member_code ? `#${user.member_code}` : '------'}
                     </td>
                     <td className="py-3.5 px-4 font-bold text-gray-900 dark:text-white">
-                      <p>{user.name}</p>
-                      <p className="text-[10px] text-gray-400 font-normal">{user.email}</p>
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-8 h-8 rounded-full overflow-hidden bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 flex items-center justify-center font-bold text-xs ring-1 ring-purple-200 dark:ring-purple-800 flex-shrink-0">
+                          {user.profile_photo ? (
+                            <img
+                              src={resolveFileUrl(user.profile_photo)}
+                              alt={user.name}
+                              className="w-full h-full object-cover"
+                              onError={(e) => { e.target.style.display = 'none'; }}
+                            />
+                          ) : (
+                            user.name ? user.name.slice(0, 2).toUpperCase() : 'U'
+                          )}
+                        </div>
+                        <div>
+                          <p>{user.name}</p>
+                          <p className="text-[10px] text-gray-400 font-normal">{user.email}</p>
+                        </div>
+                      </div>
                     </td>
                     <td className="py-3.5 px-4 font-medium text-gray-700 dark:text-gray-300">
                       {user.association_name ? (
@@ -246,15 +361,23 @@ export default function ManageUsers() {
                     </td>
                     <td className="py-3.5 px-4 text-center">
                       <span
-                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold capitalize ${
+                        className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${
                           user.role === 'super_admin'
                             ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-700 dark:text-purple-300'
+                            : user.is_main_admin || user.display_role === 'Main Association Admin'
+                            ? 'bg-purple-100 dark:bg-purple-950/60 text-purple-800 dark:text-purple-300 border border-purple-300 dark:border-purple-800'
                             : user.role === 'admin'
-                            ? 'bg-indigo-100 dark:bg-indigo-950/60 text-indigo-700 dark:text-indigo-300'
+                            ? 'bg-blue-100 dark:bg-blue-950/60 text-blue-800 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
                             : 'bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300'
                         }`}
                       >
-                        {user.role?.replace('_', ' ')}
+                        {user.role === 'super_admin'
+                          ? '👑 Super Admin'
+                          : user.is_main_admin || user.display_role === 'Main Association Admin'
+                          ? '🛡️ Main Association Admin'
+                          : user.role === 'admin'
+                          ? '🛡️ Layout Admin'
+                          : '👥 Resident Member'}
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-center">
@@ -271,15 +394,40 @@ export default function ManageUsers() {
                       </span>
                     </td>
                     <td className="py-3.5 px-4 text-right">
-                      {/* Delete Option with Confirmation */}
-                      <button
-                        type="button"
-                        onClick={() => setDeleteUser(user)}
-                        className="p-1.5 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
-                        title="Delete User"
-                      >
-                        <HiTrash className="w-4 h-4" />
-                      </button>
+                      <div className="flex items-center justify-end gap-1.5">
+                        {/* Edit option for Super Admin only */}
+                        {user.role === 'super_admin' && (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEdit(user)}
+                            className="p-1.5 rounded-lg text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 transition"
+                            title="Edit Super Admin"
+                          >
+                            <HiPencilSquare className="w-4 h-4" />
+                          </button>
+                        )}
+
+                        {/* Delete User */}
+                        {user.email === 'superadmin@association.com' || user.member_code === '000001' ? (
+                          <button
+                            type="button"
+                            disabled
+                            className="p-1.5 rounded-lg text-gray-300 dark:text-gray-600 cursor-not-allowed opacity-40 transition"
+                            title="Primary Super Admin account (#000001) cannot be deleted"
+                          >
+                            <HiTrash className="w-4 h-4" />
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => setDeleteUser(user)}
+                            className="p-1.5 rounded-lg text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 transition"
+                            title={user.role === 'super_admin' ? 'Delete Super Admin' : 'Delete User'}
+                          >
+                            <HiTrash className="w-4 h-4" />
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -372,6 +520,93 @@ export default function ManageUsers() {
               className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md transition disabled:opacity-50"
             >
               {isSubmittingAdmin ? 'Creating...' : 'Create Super Admin'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* EDIT SUPER ADMIN MODAL */}
+      <Modal
+        isOpen={Boolean(editUser)}
+        onClose={() => setEditUser(null)}
+        title={`Edit Super Admin (#${editUser?.member_code || '000001'})`}
+        size="md"
+      >
+        <form onSubmit={handleSaveEdit} className="space-y-4">
+          <div className="p-3 bg-purple-50 dark:bg-purple-950/40 border border-purple-200 dark:border-purple-800 rounded-xl text-purple-900 dark:text-purple-200 text-xs font-medium flex items-center gap-2">
+            <HiShieldCheck className="w-5 h-5 text-purple-600 flex-shrink-0" />
+            <span>
+              Editing platform-level <strong>Super Administrator</strong> credentials and contact details.
+            </span>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+              Full Name *
+            </label>
+            <input
+              type="text"
+              required
+              value={editForm.name}
+              onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+              className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white"
+            />
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                Email Address *
+              </label>
+              <input
+                type="email"
+                required
+                value={editForm.email}
+                onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+                Phone Number *
+              </label>
+              <input
+                type="tel"
+                required
+                value={editForm.phone}
+                onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white font-mono"
+              />
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-xs font-bold text-gray-700 dark:text-gray-300 mb-1">
+              New Password <span className="font-normal text-gray-400 text-[11px]">(leave blank to keep current)</span>
+            </label>
+            <input
+              type="password"
+              value={editForm.password}
+              onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+              placeholder="Enter new password if changing..."
+              className="w-full px-3.5 py-2.5 bg-gray-50 dark:bg-slate-800 border border-gray-200 dark:border-slate-700 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-purple-500 text-gray-900 dark:text-white"
+            />
+          </div>
+
+          <div className="pt-3 border-t border-gray-100 dark:border-slate-800 flex justify-end gap-2">
+            <button
+              type="button"
+              onClick={() => setEditUser(null)}
+              className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={isSavingEdit}
+              className="px-5 py-2 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs shadow-md transition disabled:opacity-50"
+            >
+              {isSavingEdit ? 'Saving...' : 'Save Changes'}
             </button>
           </div>
         </form>

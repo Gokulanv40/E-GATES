@@ -31,14 +31,19 @@ export default function Sidebar({ isOpen, onClose }) {
     { name: t('nav_associations'), path: '/super-admin/associations', icon: HiBuildingOffice2 },
     { name: t('nav_approvals'), path: '/super-admin/approvals', icon: HiShieldExclamation },
     { name: t('nav_users'), path: '/super-admin/users', icon: HiUsers },
+    { name: t('nav_events') || 'Community Events', path: '/super-admin/events', icon: HiCalendarDays },
     { name: t('nav_voting'), path: '/super-admin/polls', icon: HiChartBarSquare },
     { name: t('nav_sos_reports'), path: '/super-admin/sos-reports', icon: HiExclamationCircle },
     { name: t('nav_audit_log'), path: '/super-admin/audit-log', icon: HiClipboardDocumentList },
+    { name: t('nav_profile') || 'My Profile', path: '/super-admin/profile', icon: HiUserCircle },
   ];
 
   const adminLinks = [
     { name: t('nav_dashboard'), path: '/admin/dashboard', icon: HiSquares2X2 },
-    { name: t('nav_members'), path: '/admin/members', icon: HiUserGroup },
+    ...(user?.is_main_admin
+      ? [{ name: t('nav_approvals') || 'Pending Approvals', path: '/admin/approvals', icon: HiShieldExclamation }]
+      : []),
+    { name: 'Manage Users', path: '/admin/users', icon: HiUsers },
     { name: t('nav_sos_contacts'), path: '/admin/sos-contacts', icon: HiPhoneArrowUpRight },
     { name: t('nav_sos_alerts'), path: '/admin/sos-alerts', icon: HiExclamationCircle },
     { name: t('nav_news'), path: '/admin/news', icon: HiMegaphone },
@@ -63,6 +68,21 @@ export default function Sidebar({ isOpen, onClose }) {
       : user?.role === 'admin'
       ? adminLinks
       : memberLinks;
+
+  const resolveFileUrl = (filePath) => {
+    if (!filePath) return '';
+    if (filePath.startsWith('http://') || filePath.startsWith('https://')) return filePath;
+    const base = (import.meta.env.VITE_API_URL || 'http://localhost:5002').replace(/\/api\/v1\/?$/, '');
+    const normalized = filePath.replace(/\\/g, '/');
+    const uploadIndex = normalized.indexOf('/uploads/');
+    if (uploadIndex !== -1) {
+      return `${base}${normalized.substring(uploadIndex)}`;
+    }
+    if (normalized.startsWith('uploads/')) {
+      return `${base}/${normalized}`;
+    }
+    return `${base}/${normalized.replace(/^\/?/, '')}`;
+  };
 
   return (
     <>
@@ -90,7 +110,11 @@ export default function Sidebar({ isOpen, onClose }) {
             <div>
               <h2 className="text-sm font-bold text-white tracking-tight">Association MS</h2>
               <span className="text-[10px] text-slate-400 capitalize block -mt-0.5">
-                {user?.role?.replace('_', ' ') || 'Community'}
+                {user?.is_main_admin
+                  ? 'Main Association Admin'
+                  : (user?.role === 'admin'
+                    ? 'Layout Admin'
+                    : (user?.role?.replace('_', ' ') || 'Community'))}
               </span>
             </div>
           </div>
@@ -141,8 +165,17 @@ export default function Sidebar({ isOpen, onClose }) {
         {/* Bottom User Info Card */}
         <div className="p-3 border-t border-slate-800 bg-slate-950/40">
           <div className="flex items-center gap-3 p-2 rounded-lg bg-slate-800/40">
-            <div className="w-9 h-9 rounded-full bg-primary-500 text-white flex items-center justify-center font-bold text-xs">
-              {user?.name ? user.name.slice(0, 2).toUpperCase() : 'ME'}
+            <div className="w-9 h-9 rounded-full overflow-hidden bg-primary-500 text-white flex items-center justify-center font-bold text-xs flex-shrink-0">
+              {user?.profile_photo ? (
+                <img
+                  src={resolveFileUrl(user.profile_photo)}
+                  alt={user?.name || 'User'}
+                  className="w-full h-full object-cover"
+                  onError={(e) => { e.target.style.display = 'none'; }}
+                />
+              ) : (
+                user?.name ? user.name.slice(0, 2).toUpperCase() : 'ME'
+              )}
             </div>
             <div className="min-w-0 flex-1">
               <p className="text-xs font-semibold text-white truncate">{user?.name}</p>

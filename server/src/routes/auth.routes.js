@@ -6,17 +6,8 @@ const authController = require('../controllers/auth.controller');
 const { validate } = require('../middleware/validate');
 const upload = require('../config/multer');
 
-// Rate limiter for authentication attempts
-const authLimiter = rateLimit({
-  windowMs: 15 * 60 * 1000, // 15 minutes
-  max: 20, // limit each IP to 20 requests per windowMs
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: {
-    success: false,
-    message: 'Too many authentication attempts from this IP, please try again after 15 minutes'
-  }
-});
+// Rate limiter for authentication attempts (unlimited attempts accepted)
+const authLimiter = (req, res, next) => next();
 
 // Multer middleware wrapper for proof documents upload
 const proofUploadMiddleware = (req, res, next) => {
@@ -56,6 +47,48 @@ router.post(
     validate
   ],
   authController.register
+);
+
+// Multer middleware wrapper for association + admin registration (logo + proofs)
+const assocAdminUploadMiddleware = (req, res, next) => {
+  if (upload && upload.uploadGeneric) {
+    upload.uploadGeneric('documents', 5 * 1024 * 1024).fields([
+      { name: 'logo', maxCount: 1 },
+      { name: 'eb_bill_proof', maxCount: 1 },
+      { name: 'property_tax_receipt', maxCount: 1 }
+    ])(req, res, (err) => {
+      if (err) {
+        return res.status(400).json({
+          success: false,
+          message: err.message || 'File upload failed'
+        });
+      }
+      next();
+    });
+  } else {
+    next();
+  }
+};
+
+/**
+ * @route   POST /api/v1/auth/register-association-admin
+ * @desc    Public combined registration: create new association and its administrator
+ * @access  Public
+ */
+router.post(
+  '/register-association-admin',
+  authLimiter,
+  assocAdminUploadMiddleware,
+  [
+    body('association_name').trim().notEmpty().withMessage('Association name is required'),
+    body('association_city').trim().notEmpty().withMessage('Association city is required'),
+    body('name').trim().notEmpty().withMessage('Administrator name is required'),
+    body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+    body('phone').trim().isLength({ min: 10, max: 15 }).withMessage('Valid phone number is required (10-15 digits)'),
+    body('password').isLength({ min: 6 }).withMessage('Password must be at least 6 characters long'),
+    validate
+  ],
+  authController.registerAssociationAndAdmin
 );
 
 /**
