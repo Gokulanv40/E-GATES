@@ -59,7 +59,7 @@ router.get(
 
 /**
  * @route   GET /api/v1/sos/contacts
- * @desc    Get configured SOS contacts
+ * @desc    Get configured SOS contacts (Association Defaults + Member Family Contact)
  * @access  Private
  */
 router.get(
@@ -69,8 +69,35 @@ router.get(
 );
 
 /**
+ * @route   POST /api/v1/sos/family-contact
+ * @desc    Set or update member's personal family emergency contact (Only Member can edit)
+ * @access  Private (Authenticated Member)
+ */
+router.post(
+  '/family-contact',
+  authenticate,
+  [
+    body('name').trim().notEmpty().withMessage('Family contact name is required'),
+    body('phone').trim().notEmpty().withMessage('Family contact phone is required'),
+    validate
+  ],
+  sosController.saveFamilyContact
+);
+
+/**
+ * @route   DELETE /api/v1/sos/family-contact
+ * @desc    Delete member's personal family emergency contact
+ * @access  Private (Authenticated Member)
+ */
+router.delete(
+  '/family-contact',
+  authenticate,
+  sosController.deleteFamilyContact
+);
+
+/**
  * @route   POST /api/v1/sos/contacts
- * @desc    Set all 3 SOS contacts (2 members, 1 police)
+ * @desc    Set all 3 SOS contacts (2 members, 1 police) - Admin only
  * @access  Private (Admin, Super Admin)
  */
 router.post(

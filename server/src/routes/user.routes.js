@@ -29,6 +29,25 @@ const proofUploadMiddleware = (req, res, next) => {
   }
 };
 
+// Multer middleware wrapper for tenant Aadhaar proof upload
+const tenantUploadMiddleware = (req, res, next) => {
+  if (upload && upload.proofUpload && typeof upload.proofUpload.fields === 'function') {
+    upload.proofUpload.fields([
+      { name: 'aadhar_proof', maxCount: 1 }
+    ])(req, res, (err) => {
+      if (err) {
+        return res.status(400).json({
+          success: false,
+          message: err.message || 'File upload failed'
+        });
+      }
+      next();
+    });
+  } else {
+    next();
+  }
+};
+
 /**
  * @route   POST /api/v1/users/create-superadmin
  * @desc    Create another super admin
@@ -219,6 +238,62 @@ router.post(
     validate
   ],
   userController.restoreFamilyMember
+);
+
+/**
+ * Tenant Routes
+ */
+router.get(
+  '/:id/tenants',
+  authenticate,
+  [param('id').isInt().withMessage('User ID must be an integer'), validate],
+  userController.getTenants
+);
+
+router.post(
+  '/:id/tenants',
+  authenticate,
+  tenantUploadMiddleware,
+  [
+    param('id').isInt().withMessage('User ID must be an integer'),
+    body('name').trim().notEmpty().withMessage('Tenant name is required'),
+    validate
+  ],
+  userController.addTenant
+);
+
+router.put(
+  '/:id/tenants/:tenantId',
+  authenticate,
+  tenantUploadMiddleware,
+  [
+    param('id').isInt().withMessage('User ID must be an integer'),
+    param('tenantId').isInt().withMessage('Tenant ID must be an integer'),
+    validate
+  ],
+  userController.updateTenant
+);
+
+router.delete(
+  '/:id/tenants/:tenantId',
+  authenticate,
+  [
+    param('id').isInt().withMessage('User ID must be an integer'),
+    param('tenantId').isInt().withMessage('Tenant ID must be an integer'),
+    validate
+  ],
+  userController.removeTenant
+);
+
+router.post(
+  '/:id/tenants/:tenantId/restore',
+  authenticate,
+  [
+    param('id').isInt().withMessage('User ID must be an integer'),
+    param('tenantId').isInt().withMessage('Tenant ID must be an integer'),
+    validate
+  ],
+  userController.restoreTenant
 );
 
 /**

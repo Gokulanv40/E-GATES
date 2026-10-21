@@ -12,15 +12,16 @@ const pgPool = new Pool({
     : false,
   max: 20,
   idleTimeoutMillis: 30000,
-  connectionTimeoutMillis: 2000,
+  connectionTimeoutMillis: 10000,
 });
 
 pgPool.on('connect', () => {
   useFallback = false;
+  loggedFallback = false;
 });
 
 pgPool.on('error', (err) => {
-  if (err.code === 'ECONNREFUSED' || err.message.includes('ECONNREFUSED')) {
+  if (err.code === 'ECONNREFUSED' || err.message.includes('ECONNREFUSED') || err.message.includes('connect')) {
     useFallback = true;
     if (!loggedFallback) {
       console.log('[Database Notice]: PostgreSQL not reachable on port 5432. Active embedded database fallback enabled.');
@@ -53,6 +54,7 @@ async function executeEmbeddedQuery(sql, params = []) {
     .replace(/\bis_active\s*=\s*false\b/gi, 'is_active = 0')
     .replace(/\bTRUE\b/gi, '1')
     .replace(/\bFALSE\b/gi, '0')
+    .replace(/::(text|varchar|integer|int|bigint|date)/gi, '')
     .trim();
 
   // Replace $1, $2, etc with ?1, ?2 so SQLite reuses positional parameters
@@ -125,23 +127,36 @@ async function executeEmbeddedQuery(sql, params = []) {
  */
 const db = {
   async query(text, params) {
-    if (useFallback) {
-      return executeEmbeddedQuery(text, params);
+    if (!useFallback) {
+      try {
+        return await pgPool.query(text, params);
+      } catch (err) {
+        // If PostgreSQL connection fails, seamlessly switch to embedded DB
+        if (err.code === 'ECONNREFUSED' || err.message.includes('ECONNREFUSED') || err.message.includes('connect')) {
+          useFallback = true;
+          if (!loggedFallback) {
+            console.log('[Database Notice]: Switched to embedded database due to PostgreSQL unavailability.');
+            loggedFallback = true;
+          }
+          return executeEmbeddedQuery(text, params);
+        }
+        throw err;
+      }
     }
 
+    // When in fallback, test PostgreSQL to see if it has become available
     try {
-      return await pgPool.query(text, params);
-    } catch (err) {
-      // If PostgreSQL connection fails, seamlessly switch to embedded DB
-      if (err.code === 'ECONNREFUSED' || err.message.includes('ECONNREFUSED') || err.message.includes('connect')) {
-        useFallback = true;
-        if (!loggedFallback) {
-          console.log('[Database Notice]: Switched to embedded database due to PostgreSQL unavailability.');
-          loggedFallback = true;
-        }
+      const res = await pgPool.query(text, params);
+      useFallback = false;
+      loggedFallback = false;
+      console.log('[Database Notice]: Reconnected to PostgreSQL database successfully.');
+      return res;
+    } catch (pgErr) {
+      if (pgErr.code === 'ECONNREFUSED' || pgErr.message.includes('ECONNREFUSED') || pgErr.message.includes('connect')) {
         return executeEmbeddedQuery(text, params);
       }
-      throw err;
+      useFallback = false;
+      throw pgErr;
     }
   },
 

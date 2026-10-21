@@ -6,7 +6,7 @@ const { v4: uuidv4 } = require('uuid');
 const UPLOADS_BASE = path.resolve(__dirname, '../../uploads');
 
 // Ensure upload subdirectories exist
-const subdirs = ['proofs', 'news', 'voting', 'documents', 'logos', 'audio', 'profiles'];
+const subdirs = ['proofs', 'news', 'voting', 'documents', 'logos', 'audio', 'profiles', 'events'];
 subdirs.forEach((dir) => {
   const fullPath = path.join(UPLOADS_BASE, dir);
   if (!fs.existsSync(fullPath)) {
@@ -20,6 +20,7 @@ const DOC_IMAGE_MIMES = [
   'image/jpg',
   'image/png',
   'image/webp',
+  'image/gif',
   'application/pdf',
   'application/msword',
   'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
@@ -38,14 +39,39 @@ const AUDIO_MIMES = [
   'video/webm', // Browsers often record audio in webm container
 ];
 
-const ALL_ALLOWED_MIMES = [...DOC_IMAGE_MIMES, ...AUDIO_MIMES];
+const VIDEO_MIMES = [
+  'video/mp4',
+  'video/webm',
+  'video/quicktime', // .mov
+  'video/x-matroska', // .mkv
+  'video/avi',
+  'video/x-msvideo',
+  'video/mpeg',
+  'video/3gpp',
+];
+
+const PHOTO_MIMES = [
+  'image/jpeg',
+  'image/jpg',
+  'image/png',
+  'image/webp',
+  'image/gif',
+];
+
+const EVENT_CAPTURE_MIMES = [...PHOTO_MIMES, ...VIDEO_MIMES];
+
+const ALL_ALLOWED_MIMES = [...DOC_IMAGE_MIMES, ...AUDIO_MIMES, ...VIDEO_MIMES];
 
 // Storage generator for a target subdirectory
 const createDiskStorage = (defaultSubdir = 'documents') => {
   return multer.diskStorage({
     destination: (req, file, cb) => {
       let targetSubdir = defaultSubdir;
-      if (file.fieldname === 'eb_bill_proof' || file.fieldname === 'property_tax_receipt') {
+      if (
+        file.fieldname === 'eb_bill_proof' ||
+        file.fieldname === 'property_tax_receipt' ||
+        file.fieldname === 'aadhar_proof'
+      ) {
         targetSubdir = 'proofs';
       } else if (file.fieldname === 'profile_photo' || file.fieldname === 'avatar') {
         targetSubdir = 'profiles';
@@ -63,6 +89,14 @@ const createDiskStorage = (defaultSubdir = 'documents') => {
         } else if (req.baseUrl && req.baseUrl.includes('complaints')) {
           targetSubdir = 'documents';
         }
+      } else if (
+        file.fieldname === 'media' ||
+        file.fieldname === 'captures' ||
+        file.fieldname === 'photos' ||
+        file.fieldname === 'videos' ||
+        (req.baseUrl && req.baseUrl.includes('event-captures'))
+      ) {
+        targetSubdir = 'events';
       }
 
       const uploadPath = path.join(UPLOADS_BASE, targetSubdir);
@@ -194,6 +228,25 @@ const documentUploadInstance = uploadGeneric('documents', 25 * 1024 * 1024);
 const logoUploadInstance = uploadGeneric('logos', 5 * 1024 * 1024);
 const audioUploadInstance = uploadGeneric('audio', 10 * 1024 * 1024);
 
+const uploadEventCaptures = multer({
+  storage: createDiskStorage('events'),
+  fileFilter: (req, file, cb) => {
+    if (
+      file.mimetype.startsWith('image/') ||
+      file.mimetype.startsWith('video/') ||
+      EVENT_CAPTURE_MIMES.includes(file.mimetype)
+    ) {
+      cb(null, true);
+    } else {
+      cb(new Error('Invalid format. Only photos (JPG, PNG, WEBP, GIF) and videos (MP4, WEBM, MOV, MKV) are allowed.'), false);
+    }
+  },
+  limits: {
+    fileSize: 150 * 1024 * 1024, // 150MB per file
+    files: 20, // up to 20 files per batch
+  },
+});
+
 module.exports = {
   UPLOADS_BASE,
   uploadProof,
@@ -203,6 +256,7 @@ module.exports = {
   uploadLogo,
   uploadComplaint,
   uploadGeneric,
+  uploadEventCaptures,
   // Multer instances as requested in architectural interface
   proofUpload: proofUploadInstance,
   newsUpload: newsUploadInstance,
@@ -210,4 +264,5 @@ module.exports = {
   documentUpload: documentUploadInstance,
   logoUpload: logoUploadInstance,
   audioUpload: audioUploadInstance,
+  eventCapturesUpload: uploadEventCaptures,
 };

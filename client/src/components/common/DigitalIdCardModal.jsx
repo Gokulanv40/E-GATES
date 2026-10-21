@@ -1,19 +1,12 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   HiXMark,
-  HiPrinter,
-  HiArrowPath,
   HiShieldCheck,
-  HiDocumentText,
-  HiArrowTopRightOnSquare,
-  HiCheckBadge,
-  HiUserGroup,
   HiMapPin,
   HiPhone,
   HiEnvelope,
   HiCalendar,
   HiHeart,
-  HiQrCode,
   HiIdentification,
 } from 'react-icons/hi2';
 import api from '../../services/api';
@@ -26,11 +19,9 @@ export default function DigitalIdCardModal({
   canManageRoles = false,
   onChangeRole,
 }) {
-  const [activeSide, setActiveSide] = useState('front'); // 'front' | 'back'
   const [fullUser, setFullUser] = useState(user || {});
   const [familyMembers, setFamilyMembers] = useState([]);
   const [loadingExtra, setLoadingExtra] = useState(false);
-  const cardPrintRef = useRef(null);
 
   // Helper to resolve static file paths to backend URL
   const resolveFileUrl = (filePath) => {
@@ -51,7 +42,6 @@ export default function DigitalIdCardModal({
   useEffect(() => {
     if (!user?.id || !isOpen) return;
     setFullUser(user);
-    setActiveSide('front');
 
     const fetchExtra = async () => {
       try {
@@ -102,7 +92,7 @@ export default function DigitalIdCardModal({
   const currentAssocName =
     fullUser.association_name ||
     associationName ||
-    (fullUser.role === 'super_admin' ? 'Jishnu Infotech Platform Engine' : 'Residents Welfare Association');
+    (fullUser.role === 'super_admin' ? 'Residents Welfare Association' : 'Residents Welfare Association');
 
   const isSuperAdmin = fullUser.role === 'super_admin';
   const isMainAdmin = fullUser.is_main_admin || fullUser.display_role === 'Main Association Admin';
@@ -149,14 +139,6 @@ export default function DigitalIdCardModal({
       };
 
   const memberCode = fullUser.member_code || (isSuperAdmin ? '000001' : 'PENDING');
-  const qrData = encodeURIComponent(
-    `RWA-ID: #${memberCode} | Name: ${fullUser.name} | Role: ${roleTitle} | Door: ${fullUser.door_no || 'N/A'} | Assoc: ${currentAssocName}`
-  );
-  const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${qrData}`;
-
-  const handlePrint = () => {
-    window.print();
-  };
 
   return (
     <div
@@ -167,77 +149,17 @@ export default function DigitalIdCardModal({
       aria-modal="true"
       role="dialog"
     >
-      {/* Print Styles */}
-      <style>{`
-        @media print {
-          body * {
-            visibility: hidden;
-          }
-          #digital-id-print-zone, #digital-id-print-zone * {
-            visibility: visible;
-          }
-          #digital-id-print-zone {
-            position: absolute;
-            left: 0;
-            top: 0;
-            width: 100%;
-            margin: 0;
-            padding: 20px;
-            background: white !important;
-          }
-          .no-print {
-            display: none !important;
-          }
-        }
-      `}</style>
-
-      <div className="relative w-full max-w-lg bg-gray-900/90 rounded-3xl shadow-2xl border border-gray-700/60 overflow-hidden my-auto flex flex-col max-h-[95vh]">
+      <div className="relative w-full max-w-md bg-gray-900/90 rounded-3xl shadow-2xl border border-gray-700/60 overflow-hidden my-auto flex flex-col max-h-[95vh]">
         {/* Top Floating Control Bar */}
-        <div className="p-3.5 sm:px-6 bg-gray-900 border-b border-gray-800 flex items-center justify-between gap-2 no-print">
+        <div className="p-3.5 sm:px-6 bg-gray-900 border-b border-gray-800 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-xs font-bold uppercase tracking-wider text-gray-200">
-              Digital Resident Identity Card
+              Digital Identity Pass
             </span>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            {/* Flip / Tab Toggle */}
-            <div className="flex p-0.5 bg-gray-800 rounded-xl border border-gray-700">
-              <button
-                type="button"
-                onClick={() => setActiveSide('front')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
-                  activeSide === 'front'
-                    ? 'bg-primary-600 text-white shadow-xs'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                🪪 Front Badge
-              </button>
-              <button
-                type="button"
-                onClick={() => setActiveSide('back')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition ${
-                  activeSide === 'back'
-                    ? 'bg-primary-600 text-white shadow-xs'
-                    : 'text-gray-400 hover:text-white'
-                }`}
-              >
-                📑 Back / Address
-              </button>
-            </div>
-
-            {/* Print Button */}
-            <button
-              type="button"
-              onClick={handlePrint}
-              title="Print Digital ID Card"
-              className="p-1.5 text-gray-400 hover:text-white bg-gray-800 hover:bg-gray-700 rounded-xl border border-gray-700 transition"
-            >
-              <HiPrinter className="w-4 h-4" />
-            </button>
-
+          <div className="flex items-center gap-2">
             {/* Close Button */}
             <button
               type="button"
@@ -250,355 +172,165 @@ export default function DigitalIdCardModal({
           </div>
         </div>
 
-        {/* Modal Scrollable Body */}
+        {/* Modal Body */}
         <div className="p-4 sm:p-6 overflow-y-auto flex-1 flex flex-col items-center">
           {/* Lanyard Top Punch Hole & Clip Strap */}
-          <div className="w-full flex flex-col items-center mb-1 no-print">
+          <div className="w-full flex flex-col items-center mb-1">
             <div className="w-16 h-3 bg-gray-800 rounded-full border border-gray-600 shadow-inner flex items-center justify-center">
               <div className="w-6 h-1 bg-black/70 rounded-full" />
             </div>
             <div className="w-10 h-3 bg-gradient-to-b from-gray-700 to-gray-900 border-x border-gray-600 shadow-md" />
           </div>
 
-          {/* CARD CONTAINER (Target for Print & Realistic Display) */}
-          <div
-            id="digital-id-print-zone"
-            ref={cardPrintRef}
-            className="w-full max-w-[390px] rounded-3xl overflow-hidden shadow-2xl border border-gray-200 bg-white text-gray-900 transition-all duration-300 relative"
-          >
-            {activeSide === 'front' ? (
-              /* =========================================================================
-                 FRONT SIDE: OFFICIAL RESIDENT IDENTITY BADGE
-                 ========================================================================= */
-              <div className="flex flex-col">
-                {/* Header Band */}
+          {/* SINGLE FRONT-SIDE ID CARD CONTAINER */}
+          <div className="w-full max-w-[370px] rounded-3xl overflow-hidden shadow-2xl border border-gray-200 bg-white text-gray-900 transition-all duration-300 relative">
+            {/* Header Band */}
+            <div
+              className={`bg-gradient-to-r ${roleTheme.cardHeader} text-white p-4 pt-5 pb-4 relative overflow-hidden text-center`}
+            >
+              {/* Subtle Security Guilloche Pattern overlay */}
+              <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:8px_8px] pointer-events-none" />
+
+              {/* Association Name */}
+              <div className="relative z-10 px-6">
+                <p className="text-[10px] tracking-widest uppercase font-extrabold text-amber-400">
+                  RESIDENTS WELFARE ASSOCIATION
+                </p>
+                <h2 className="text-sm sm:text-base font-black tracking-tight mt-0.5 line-clamp-1 drop-shadow-sm">
+                  {currentAssocName}
+                </h2>
+                <p className="text-[9px] uppercase tracking-wider text-gray-300 font-semibold mt-0.5">
+                  OFFICIAL DIGITAL IDENTITY PASS
+                </p>
+              </div>
+
+              {/* Hologram / Smart Chip Simulation */}
+              <div className="absolute top-3 left-3 w-8 h-6 bg-gradient-to-tr from-amber-200 via-amber-400 to-yellow-500 rounded-md border border-amber-300 shadow-xs flex items-center justify-center opacity-85">
+                <div className="w-4 h-3 border border-amber-800/40 rounded-xs flex flex-col justify-between p-0.5">
+                  <div className="w-full h-0.5 bg-amber-800/40" />
+                  <div className="w-full h-0.5 bg-amber-800/40" />
+                </div>
+              </div>
+
+              <div className="absolute top-3 right-3 px-2 py-0.5 bg-white/10 backdrop-blur-md rounded-full border border-white/20 text-[9px] font-bold text-amber-300 flex items-center gap-1">
+                <HiShieldCheck className="w-3 h-3 text-amber-300" />
+                <span>VERIFIED</span>
+              </div>
+            </div>
+
+            {/* Photo & Identity Section */}
+            <div className="p-5 flex flex-col items-center text-center bg-gradient-to-b from-gray-50 via-white to-gray-50/50">
+              <div className="relative mb-2.5">
                 <div
-                  className={`bg-gradient-to-r ${roleTheme.cardHeader} text-white p-4 pt-5 pb-4 relative overflow-hidden text-center`}
+                  className={`w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden shadow-lg border-2 border-white ring-4 ${roleTheme.ring} bg-gradient-to-tr from-gray-800 to-gray-700 flex items-center justify-center font-black text-3xl text-white`}
                 >
-                  {/* Subtle Security Guilloche Pattern overlay */}
-                  <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:8px_8px] pointer-events-none" />
-
-                  {/* Association Name */}
-                  <div className="relative z-10">
-                    <p className="text-[10px] tracking-widest uppercase font-extrabold text-amber-400">
-                      RESIDENTS WELFARE ASSOCIATION
-                    </p>
-                    <h2 className="text-sm sm:text-base font-black tracking-tight mt-0.5 line-clamp-1 drop-shadow-sm">
-                      {currentAssocName}
-                    </h2>
-                    <p className="text-[9px] uppercase tracking-wider text-gray-300 font-semibold mt-0.5">
-                      OFFICIAL DIGITAL IDENTITY PASS
-                    </p>
-                  </div>
-
-                  {/* Hologram / Smart Chip Simulation */}
-                  <div className="absolute top-3 left-3 w-8 h-6 bg-gradient-to-tr from-amber-200 via-amber-400 to-yellow-500 rounded-md border border-amber-300 shadow-xs flex items-center justify-center opacity-85">
-                    <div className="w-4 h-3 border border-amber-800/40 rounded-xs flex flex-col justify-between p-0.5">
-                      <div className="w-full h-0.5 bg-amber-800/40" />
-                      <div className="w-full h-0.5 bg-amber-800/40" />
-                    </div>
-                  </div>
-
-                  <div className="absolute top-3 right-3 px-2 py-0.5 bg-white/10 backdrop-blur-md rounded-full border border-white/20 text-[9px] font-bold text-amber-300 flex items-center gap-1">
-                    <HiShieldCheck className="w-3 h-3 text-amber-300" />
-                    <span>VERIFIED</span>
-                  </div>
+                  {fullUser.profile_photo ? (
+                    <img
+                      src={resolveFileUrl(fullUser.profile_photo)}
+                      alt={fullUser.name}
+                      className="w-full h-full object-cover"
+                      onError={(e) => {
+                        e.target.style.display = 'none';
+                      }}
+                    />
+                  ) : fullUser.name ? (
+                    fullUser.name.slice(0, 2).toUpperCase()
+                  ) : (
+                    'U'
+                  )}
                 </div>
 
-                {/* Photo & Role Section */}
-                <div className="p-4 sm:p-5 flex flex-col items-center text-center -mt-2 bg-gradient-to-b from-gray-50 via-white to-gray-50/50">
-                  <div className="relative mb-2.5">
-                    <div
-                      className={`w-24 h-24 sm:w-28 sm:h-28 rounded-2xl overflow-hidden shadow-lg border-2 border-white ring-4 ${roleTheme.ring} bg-gradient-to-tr from-gray-800 to-gray-700 flex items-center justify-center font-black text-3xl text-white`}
-                    >
-                      {fullUser.profile_photo ? (
-                        <img
-                          src={resolveFileUrl(fullUser.profile_photo)}
-                          alt={fullUser.name}
-                          className="w-full h-full object-cover"
-                          onError={(e) => {
-                            e.target.style.display = 'none';
-                          }}
-                        />
-                      ) : fullUser.name ? (
-                        fullUser.name.slice(0, 2).toUpperCase()
-                      ) : (
-                        'U'
-                      )}
-                    </div>
-
-                    {/* Status Pill on Photo */}
-                    <span className="absolute -bottom-2 inset-x-0 mx-auto w-max px-2.5 py-0.5 bg-emerald-600 text-white font-extrabold text-[9px] uppercase tracking-wider rounded-full shadow-md border border-emerald-400 flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
-                      <span>{fullUser.status === 'approved' ? 'Active' : fullUser.status}</span>
-                    </span>
-                  </div>
-
-                  {/* Member Name */}
-                  <h3 className="text-base sm:text-lg font-black text-gray-900 tracking-tight mt-2 line-clamp-1">
-                    {fullUser.name}
-                  </h3>
-
-                  {/* Role Designation Badge */}
-                  <div
-                    className={`mt-1 inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border shadow-xs ${roleTheme.badgeBg}`}
-                  >
-                    <span>{roleTheme.emoji}</span>
-                    <span>{roleTitle}</span>
-                  </div>
-
-                  {/* Member Code Monospace Pill */}
-                  <div className="mt-2 flex items-center gap-2">
-                    <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
-                      MEMBER ID:
-                    </span>
-                    <span className="font-mono text-xs font-black text-primary-700 bg-primary-50 px-2.5 py-0.5 rounded-lg border border-primary-200">
-                      #{memberCode}
-                    </span>
-                  </div>
-
-                  {/* Front Identity Details Grid */}
-                  <div className="w-full grid grid-cols-2 gap-2 mt-4 text-left text-xs">
-                    <div className="p-2.5 bg-white rounded-xl border border-gray-100 shadow-xs">
-                      <span className="text-[10px] font-bold uppercase text-gray-400 block">
-                        Door / Plot No
-                      </span>
-                      <span className="font-extrabold text-gray-900 truncate block">
-                        {fullUser.door_no ? `Door #${fullUser.door_no}` : '—'}
-                      </span>
-                    </div>
-
-                    <div className="p-2.5 bg-white rounded-xl border border-gray-100 shadow-xs">
-                      <span className="text-[10px] font-bold uppercase text-gray-400 block">
-                        Street / Cross
-                      </span>
-                      <span className="font-semibold text-gray-900 truncate block">
-                        {fullUser.street || '—'}
-                      </span>
-                    </div>
-
-                    <div className="p-2.5 bg-white rounded-xl border border-gray-100 shadow-xs">
-                      <span className="text-[10px] font-bold uppercase text-gray-400 block">
-                        Phone / Contact
-                      </span>
-                      <span className="font-mono font-semibold text-gray-900 truncate block">
-                        {fullUser.phone || '—'}
-                      </span>
-                    </div>
-
-                    <div className="p-2.5 bg-white rounded-xl border border-gray-100 shadow-xs">
-                      <span className="text-[10px] font-bold uppercase text-gray-400 block">
-                        Blood Group
-                      </span>
-                      <span className="font-bold text-rose-600 truncate block">
-                        {familyMembers.find((f) => f.relation?.toLowerCase() === 'self')?.blood_group ||
-                          fullUser.blood_group || (
-                            <span className="text-gray-400 font-normal italic">Not specified</span>
-                          )}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* QR Code & Barcode Verification Footer */}
-                  <div className="w-full mt-4 p-3 bg-white rounded-2xl border border-gray-100 shadow-xs flex items-center justify-between gap-3">
-                    <div className="w-16 h-16 bg-white p-1 rounded-xl border border-gray-200 flex-shrink-0 flex items-center justify-center overflow-hidden">
-                      <img
-                        src={qrUrl}
-                        alt="Verification QR"
-                        className="w-full h-full object-contain"
-                        crossOrigin="anonymous"
-                      />
-                    </div>
-
-                    <div className="flex-1 text-left">
-                      <p className="text-[9px] font-extrabold uppercase text-gray-400 tracking-wider">
-                        Scan for Digital Verification
-                      </p>
-                      {/* Simulated Barcode */}
-                      <div className="mt-1 h-6 flex items-end gap-0.5 overflow-hidden">
-                        {[4, 2, 6, 3, 5, 2, 7, 3, 5, 4, 2, 6, 3, 5, 2, 6, 4, 3, 5, 2, 4, 6, 2, 5, 3, 6, 4, 2, 5].map(
-                          (h, idx) => (
-                            <div
-                              key={idx}
-                              className="bg-gray-900 w-1 rounded-xs"
-                              style={{ height: `${h * 3.5}px` }}
-                            />
-                          )
-                        )}
-                      </div>
-                      <p className="font-mono text-[9px] text-gray-500 font-bold tracking-widest mt-0.5">
-                        RWA-{memberCode}
-                      </p>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Card Micro Footer */}
-                <div className="bg-gray-100 py-1.5 px-4 text-center border-t border-gray-200">
-                  <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">
-                    Authorized Resident Credential • Powered by JishnuInfotech
-                  </p>
-                </div>
+                {/* Status Pill on Photo */}
+                <span className="absolute -bottom-2 inset-x-0 mx-auto w-max px-2.5 py-0.5 bg-emerald-600 text-white font-extrabold text-[9px] uppercase tracking-wider rounded-full shadow-md border border-emerald-400 flex items-center gap-1">
+                  <span className="w-1.5 h-1.5 rounded-full bg-white animate-ping" />
+                  <span>{fullUser.status === 'approved' ? 'Active' : fullUser.status || 'Active'}</span>
+                </span>
               </div>
-            ) : (
-              /* =========================================================================
-                 BACK SIDE: COMPLETE RESIDENTIAL DETAILS & VERIFICATION PROOFS
-                 ========================================================================= */
-              <div className="flex flex-col text-left">
-                {/* Magnetic Stripe */}
-                <div className="w-full h-10 bg-slate-900 flex items-center px-4">
-                  <div className="w-full h-3 bg-slate-800 border-y border-slate-700/60" />
+
+              {/* Member Name */}
+              <h3 className="text-base sm:text-lg font-black text-gray-900 tracking-tight mt-2 line-clamp-1">
+                {fullUser.name}
+              </h3>
+
+              {/* Role Designation Badge */}
+              <div
+                className={`mt-1 inline-flex items-center gap-1 px-3 py-1 rounded-full text-xs font-bold border shadow-xs ${roleTheme.badgeBg}`}
+              >
+                <span>{roleTheme.emoji}</span>
+                <span>{roleTitle}</span>
+              </div>
+
+              {/* Member Code Monospace Pill */}
+              <div className="mt-2 flex items-center gap-2">
+                <span className="text-[10px] uppercase font-bold text-gray-400 tracking-wider">
+                  MEMBER ID:
+                </span>
+                <span className="font-mono text-xs font-black text-primary-700 bg-primary-50 px-2.5 py-0.5 rounded-lg border border-primary-200">
+                  #{memberCode}
+                </span>
+              </div>
+
+              {/* Front Identity Details Grid */}
+              <div className="w-full grid grid-cols-2 gap-2 mt-4 text-left text-xs">
+                <div className="p-2.5 bg-white rounded-xl border border-gray-100 shadow-xs">
+                  <span className="text-[10px] font-bold uppercase text-gray-400 block">
+                    Door / Plot No
+                  </span>
+                  <span className="font-extrabold text-gray-900 truncate block">
+                    {fullUser.door_no ? `Door #${fullUser.door_no}` : '—'}
+                  </span>
                 </div>
 
-                {/* Signature Panel */}
-                <div className="p-4 bg-gray-50 border-b border-gray-200">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-[9px] font-bold uppercase text-gray-400">
-                      Authorized Signature / Association Seal
-                    </span>
-                    <span className="text-[9px] font-mono text-gray-400">ID #{memberCode}</span>
-                  </div>
-                  <div className="w-full h-11 bg-white border border-gray-300 rounded-lg p-2 flex items-center justify-between relative overflow-hidden">
-                    <span className="font-serif italic text-sm text-gray-700 tracking-wider">
-                      {fullUser.name}
-                    </span>
-                    <div className="w-7 h-7 rounded-full border-2 border-emerald-600/40 text-[8px] font-bold text-emerald-700 flex items-center justify-center uppercase tracking-tighter transform -rotate-12">
-                      SEAL
-                    </div>
-                  </div>
+                <div className="p-2.5 bg-white rounded-xl border border-gray-100 shadow-xs">
+                  <span className="text-[10px] font-bold uppercase text-gray-400 block">
+                    Street / Cross
+                  </span>
+                  <span className="font-semibold text-gray-900 truncate block">
+                    {fullUser.street || '—'}
+                  </span>
                 </div>
 
-                {/* Details Body */}
-                <div className="p-4 sm:p-5 space-y-3.5 text-xs">
-                  {/* Full Postal Residence Address */}
-                  <div>
-                    <span className="text-[10px] font-bold uppercase text-gray-400 block mb-1 flex items-center gap-1">
-                      <HiMapPin className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Complete Residence Address</span>
+                <div className="p-2.5 bg-white rounded-xl border border-gray-100 shadow-xs">
+                  <span className="text-[10px] font-bold uppercase text-gray-400 block">
+                    Phone / Contact
+                  </span>
+                  <span className="font-mono font-semibold text-gray-900 truncate block">
+                    {fullUser.phone || '—'}
+                  </span>
+                </div>
+
+                <div className="p-2.5 bg-white rounded-xl border border-gray-100 shadow-xs">
+                  <span className="text-[10px] font-bold uppercase text-gray-400 block">
+                    Blood Group
+                  </span>
+                  <span className="font-bold text-rose-600 truncate block">
+                    {familyMembers.find((f) => f.relation?.toLowerCase() === 'self')?.blood_group ||
+                      fullUser.blood_group || (
+                        <span className="text-gray-400 font-normal italic">Not specified</span>
+                      )}
+                  </span>
+                </div>
+
+                {(fullUser.layout_name || fullUser.district) && (
+                  <div className="col-span-2 p-2.5 bg-white rounded-xl border border-gray-100 shadow-xs">
+                    <span className="text-[10px] font-bold uppercase text-gray-400 block">
+                      Layout / Location
                     </span>
-                    <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 font-medium text-gray-800 leading-relaxed text-xs">
-                      {[
-                        fullUser.door_no ? `Door / Plot #${fullUser.door_no}` : null,
-                        fullUser.street,
-                        fullUser.layout_name,
-                        fullUser.taluk ? `${fullUser.taluk} Taluk` : null,
-                        fullUser.district,
-                        fullUser.state,
-                      ]
+                    <span className="font-semibold text-gray-800 truncate block">
+                      {[fullUser.layout_name, fullUser.taluk ? `${fullUser.taluk} Taluk` : null, fullUser.district, fullUser.state]
                         .filter(Boolean)
-                        .join(', ') || 'No complete address recorded.'}
-                    </div>
-                  </div>
-
-                  {/* Registered Household / Family Members */}
-                  <div>
-                    <span className="text-[10px] font-bold uppercase text-gray-400 block mb-1 flex items-center gap-1">
-                      <HiUserGroup className="w-3.5 h-3.5 text-teal-600" />
-                      <span>Registered Household Members ({familyMembers.length})</span>
+                        .join(', ')}
                     </span>
-                    {familyMembers.length === 0 ? (
-                      <div className="p-2.5 bg-gray-50 rounded-xl border border-dashed border-gray-200 text-gray-400 italic text-[11px] text-center">
-                        No additional family members registered
-                      </div>
-                    ) : (
-                      <div className="space-y-1.5 max-h-32 overflow-y-auto pr-1">
-                        {familyMembers.map((fm) => (
-                          <div
-                            key={fm.id}
-                            className="p-2 bg-white rounded-lg border border-gray-200 flex items-center justify-between text-xs"
-                          >
-                            <div>
-                              <span className="font-bold text-gray-900">{fm.name}</span>
-                              <span className="ml-1.5 text-[10px] text-gray-500 font-medium">
-                                ({fm.relation})
-                              </span>
-                            </div>
-                            {fm.blood_group && (
-                              <span className="px-1.5 py-0.5 bg-rose-50 border border-rose-200 text-rose-700 font-extrabold text-[10px] rounded">
-                                {fm.blood_group}
-                              </span>
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
-
-                  {/* Address Proof Documents Status */}
-                  <div>
-                    <span className="text-[10px] font-bold uppercase text-gray-400 block mb-1">
-                      Verification Documents On File
-                    </span>
-                    <div className="grid grid-cols-2 gap-2">
-                      {fullUser.eb_bill_proof ? (
-                        <a
-                          href={resolveFileUrl(fullUser.eb_bill_proof)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-between p-2 rounded-lg border border-sky-200 bg-sky-50 text-sky-800 text-[11px] font-bold hover:bg-sky-100 transition"
-                        >
-                          <span className="flex items-center gap-1 truncate">
-                            <HiDocumentText className="w-3.5 h-3.5 text-sky-600 flex-shrink-0" />
-                            <span>EB Bill</span>
-                          </span>
-                          <HiArrowTopRightOnSquare className="w-3 h-3 flex-shrink-0" />
-                        </a>
-                      ) : (
-                        <div className="p-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-400 text-[11px] text-center">
-                          EB Bill: Not on file
-                        </div>
-                      )}
-
-                      {fullUser.property_tax_receipt ? (
-                        <a
-                          href={resolveFileUrl(fullUser.property_tax_receipt)}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="flex items-center justify-between p-2 rounded-lg border border-emerald-200 bg-emerald-50 text-emerald-800 text-[11px] font-bold hover:bg-emerald-100 transition"
-                        >
-                          <span className="flex items-center gap-1 truncate">
-                            <HiDocumentText className="w-3.5 h-3.5 text-emerald-600 flex-shrink-0" />
-                            <span>Tax Receipt</span>
-                          </span>
-                          <HiArrowTopRightOnSquare className="w-3 h-3 flex-shrink-0" />
-                        </a>
-                      ) : (
-                        <div className="p-2 rounded-lg border border-gray-200 bg-gray-50 text-gray-400 text-[11px] text-center">
-                          Tax: Not on file
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Terms & Return Notice */}
-                  <div className="p-2.5 bg-amber-50/70 rounded-xl border border-amber-200/60 text-[10px] text-amber-900 leading-relaxed">
-                    <p className="font-bold mb-0.5">TERMS & RESIDENTIAL DISCLAIMER:</p>
-                    This digital identity pass is issued solely to verified property owners and resident members of the association. If found, please return to the association administrative office.
-                  </div>
-
-                  {/* Issue & Expiry */}
-                  <div className="flex items-center justify-between pt-1 text-[10px] text-gray-400 border-t border-gray-100">
-                    <span>
-                      Registered: {fullUser.created_at ? new Date(fullUser.created_at).toLocaleDateString() : '—'}
-                    </span>
-                    <span className="font-bold text-emerald-600 uppercase">VALID RESIDENT PASS</span>
-                  </div>
-                </div>
-
-                {/* Back Footer */}
-                <div className="bg-gray-100 py-1.5 px-4 text-center border-t border-gray-200">
-                  <p className="text-[9px] font-bold text-gray-500 uppercase tracking-widest">
-                    Emergency Helpline: Dial SOS via Mobile App • Association Management Engine
-                  </p>
-                </div>
+                )}
               </div>
-            )}
+            </div>
           </div>
         </div>
 
         {/* Modal Bottom Actions Bar */}
-        <div className="p-3.5 sm:px-6 bg-gray-900 border-t border-gray-800 flex flex-wrap items-center justify-between gap-2 no-print">
-          <div className="flex items-center gap-2">
+        <div className="p-3.5 sm:px-6 bg-gray-900 border-t border-gray-800 flex items-center justify-between gap-2">
+          <div>
             {canManageRoles && (
               <button
                 type="button"
@@ -614,25 +346,14 @@ export default function DigitalIdCardModal({
             )}
           </div>
 
-          <div className="flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setActiveSide(activeSide === 'front' ? 'back' : 'front')}
-              className="inline-flex items-center gap-1.5 px-3.5 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-200 text-xs font-bold rounded-xl border border-gray-700 transition"
-            >
-              <HiArrowPath className="w-3.5 h-3.5" />
-              <span>Flip to {activeSide === 'front' ? 'Back View' : 'Front View'}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handlePrint}
-              className="inline-flex items-center gap-1.5 px-4 py-1.5 bg-primary-600 hover:bg-primary-500 text-white text-xs font-bold rounded-xl transition shadow-xs"
-            >
-              <HiPrinter className="w-3.5 h-3.5" />
-              <span>Print ID</span>
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="inline-flex items-center gap-1.5 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-200 hover:text-white text-xs font-bold rounded-xl transition border border-gray-700 shadow-xs ml-auto"
+          >
+            <HiXMark className="w-4 h-4" />
+            <span>Close</span>
+          </button>
         </div>
       </div>
     </div>

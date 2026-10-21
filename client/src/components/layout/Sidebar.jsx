@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { NavLink, useLocation } from 'react-router-dom';
 import {
   HiSquares2X2,
@@ -13,18 +13,22 @@ import {
   HiChatBubbleLeftRight,
   HiCreditCard,
   HiCalendarDays,
+  HiFilm,
   HiDocumentDuplicate,
   HiUserCircle,
   HiXMark,
   HiShieldExclamation,
+  HiIdentification,
 } from 'react-icons/hi2';
 import { useAuth } from '../../hooks/useAuth';
 import { useLanguage } from '../../context/LanguageContext';
+import DigitalIdCardModal from '../common/DigitalIdCardModal';
 
 export default function Sidebar({ isOpen, onClose }) {
   const { user } = useAuth();
   const { t } = useLanguage();
   const location = useLocation();
+  const [showIdCard, setShowIdCard] = useState(false);
 
   const superAdminLinks = [
     { name: t('nav_dashboard'), path: '/super-admin/dashboard', icon: HiSquares2X2 },
@@ -32,6 +36,7 @@ export default function Sidebar({ isOpen, onClose }) {
     { name: t('nav_approvals'), path: '/super-admin/approvals', icon: HiShieldExclamation },
     { name: t('nav_users'), path: '/super-admin/users', icon: HiUsers },
     { name: t('nav_events') || 'Community Events', path: '/super-admin/events', icon: HiCalendarDays },
+    { name: t('nav_event_captures') || 'Event Captures', path: '/super-admin/event-captures', icon: HiFilm },
     { name: t('nav_voting'), path: '/super-admin/polls', icon: HiChartBarSquare },
     { name: t('nav_sos_reports'), path: '/super-admin/sos-reports', icon: HiExclamationCircle },
     { name: t('nav_audit_log'), path: '/super-admin/audit-log', icon: HiClipboardDocumentList },
@@ -50,12 +55,15 @@ export default function Sidebar({ isOpen, onClose }) {
     { name: t('nav_voting'), path: '/admin/voting', icon: HiChartBarSquare },
     { name: t('nav_complaints'), path: '/admin/complaints', icon: HiChatBubbleLeftRight },
     { name: t('nav_events'), path: '/admin/events', icon: HiCalendarDays },
+    { name: t('nav_event_captures') || 'Event Captures', path: '/admin/event-captures', icon: HiFilm },
     { name: t('nav_profile'), path: '/admin/profile', icon: HiUserCircle },
   ];
 
   const memberLinks = [
     { name: t('nav_dashboard'), path: '/member/dashboard', icon: HiSquares2X2 },
+    { name: t('nav_sos_contacts') || 'Emergency SOS', path: '/member/sos-contacts', icon: HiPhoneArrowUpRight },
     { name: t('nav_events'), path: '/member/events', icon: HiCalendarDays },
+    { name: t('nav_event_captures') || 'Event Captures', path: '/member/event-captures', icon: HiFilm },
     { name: t('nav_news'), path: '/member/news', icon: HiMegaphone },
     { name: t('nav_voting'), path: '/member/voting', icon: HiChartBarSquare },
     { name: t('nav_complaints'), path: '/member/complaints', icon: HiChatBubbleLeftRight },
@@ -103,13 +111,22 @@ export default function Sidebar({ isOpen, onClose }) {
       >
         {/* Top Header */}
         <div className="h-16 px-5 border-b border-slate-800 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 rounded-lg bg-primary-600 text-white font-bold flex items-center justify-center text-sm shadow-md">
+          <button
+            type="button"
+            onClick={() => setShowIdCard(true)}
+            title="Click to view Digital ID Card"
+            className="flex items-center gap-3 text-left p-1.5 -ml-1.5 rounded-xl hover:bg-slate-800/80 transition focus:outline-none focus:ring-1 focus:ring-primary-500 cursor-pointer group"
+          >
+            <div className="w-8 h-8 rounded-lg bg-primary-600 text-white font-bold flex items-center justify-center text-sm shadow-md group-hover:scale-105 group-hover:bg-primary-500 transition">
               LA
             </div>
             <div>
-              <h2 className="text-sm font-bold text-white tracking-tight">Association MS</h2>
-              <span className="text-[10px] text-slate-400 capitalize block -mt-0.5">
+              <div className="flex items-center gap-1.5">
+                <h2 className="text-sm font-bold text-white tracking-tight group-hover:text-primary-300 transition">
+                  Association MS
+                </h2>
+              </div>
+              <span className="text-[10px] text-slate-400 capitalize block -mt-0.5 group-hover:text-slate-300">
                 {user?.is_main_admin
                   ? 'Main Association Admin'
                   : (user?.role === 'admin'
@@ -117,7 +134,7 @@ export default function Sidebar({ isOpen, onClose }) {
                     : (user?.role?.replace('_', ' ') || 'Community'))}
               </span>
             </div>
-          </div>
+          </button>
 
           <button
             type="button"
@@ -186,6 +203,16 @@ export default function Sidebar({ isOpen, onClose }) {
           </div>
         </div>
       </aside>
+
+      {/* Digital ID Card Modal */}
+      {showIdCard && (
+        <DigitalIdCardModal
+          isOpen={showIdCard}
+          onClose={() => setShowIdCard(false)}
+          user={user}
+          associationName={user?.association_name}
+        />
+      )}
     </>
   );
 }

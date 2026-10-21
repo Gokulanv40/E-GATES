@@ -248,3 +248,48 @@ CREATE TABLE IF NOT EXISTS family_members (
 
 CREATE INDEX IF NOT EXISTS idx_family_members_user ON family_members(user_id);
 
+-- 17. Tenants Registry
+CREATE TABLE IF NOT EXISTS tenants (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name VARCHAR(255) NOT NULL,
+  dob DATE,
+  blood_group VARCHAR(10),
+  aadhar_proof VARCHAR(500),
+  phone VARCHAR(20),
+  email VARCHAR(255),
+  is_active BOOLEAN DEFAULT true,
+  removal_reason TEXT,
+  removed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_tenants_user ON tenants(user_id);
+
+-- 18. Event Captures (Photos & Videos)
+CREATE TABLE IF NOT EXISTS event_captures (
+  id SERIAL PRIMARY KEY,
+  association_id INTEGER NOT NULL REFERENCES associations(id) ON DELETE CASCADE,
+  event_id INTEGER REFERENCES events(id) ON DELETE SET NULL,
+  uploaded_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  title VARCHAR(500) NOT NULL,
+  description TEXT,
+  event_name VARCHAR(255),
+  media_type VARCHAR(20) NOT NULL, -- 'photo' | 'video'
+  file_path VARCHAR(500) NOT NULL,
+  file_name VARCHAR(255),
+  file_size BIGINT,
+  mime_type VARCHAR(100),
+  thumbnail_path VARCHAR(500),
+  event_date DATE,
+  likes_count INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_event_captures_assoc ON event_captures(association_id);
+CREATE INDEX IF NOT EXISTS idx_event_captures_event ON event_captures(event_id);
+CREATE INDEX IF NOT EXISTS idx_event_captures_type ON event_captures(media_type);
+
+

@@ -34,12 +34,14 @@ import toast from 'react-hot-toast';
 import { useAuth } from '../../hooks/useAuth';
 import api from '../../services/api';
 import Modal from '../../components/common/Modal';
+import DigitalIdCardModal from '../../components/common/DigitalIdCardModal';
 
 export default function Profile() {
   const { user, updateUser } = useAuth();
 
   const [loading, setLoading] = useState(false);
   const [profileData, setProfileData] = useState(user || {});
+  const [isIdCardOpen, setIsIdCardOpen] = useState(false);
 
   // Profile photo quick upload
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
@@ -126,6 +128,38 @@ export default function Profile() {
   const [submittingRemoval, setSubmittingRemoval] = useState(false);
   const [showRemovedHistory, setShowRemovedHistory] = useState(false);
 
+  // Tenant Management State
+  const [tenants, setTenants] = useState([]);
+  const [loadingTenants, setLoadingTenants] = useState(false);
+  const [isAddTenantOpen, setIsAddTenantOpen] = useState(false);
+  const [editingTenant, setEditingTenant] = useState(null);
+  const [submittingTenant, setSubmittingTenant] = useState(false);
+  const [tenantForm, setTenantForm] = useState({
+    name: '',
+    dob: '',
+    blood_group: '',
+    phone: '',
+  });
+  const [tenantAadharFile, setTenantAadharFile] = useState(null);
+  const [tenantAadharPreview, setTenantAadharPreview] = useState(null);
+  const tenantAadharInputRef = useRef(null);
+
+  // Tenant Removal / Vacate State
+  const [removingTenant, setRemovingTenant] = useState(null);
+  const [tenantVacatePreset, setTenantVacatePreset] = useState('Vacated / Lease Ended');
+  const [tenantVacateCustom, setTenantVacateCustom] = useState('');
+  const [submittingTenantRemoval, setSubmittingTenantRemoval] = useState(false);
+  const [showVacatedTenants, setShowVacatedTenants] = useState(false);
+
+  const TENANT_VACATE_PRESETS = [
+    'Vacated / Lease Ended',
+    'Relocated / Moved to new city',
+    'Agreement Terminated',
+    'Evicted',
+    'Entered by mistake',
+    'Other',
+  ];
+
   const RELATION_PRESETS = [
     'Spouse',
     'Husband',
@@ -205,9 +239,24 @@ export default function Profile() {
     }
   };
 
+  const fetchTenants = async () => {
+    if (!user?.id) return;
+    try {
+      setLoadingTenants(true);
+      const res = await api.get(`/users/${user.id}/tenants?include_removed=true`);
+      const list = res.data?.data || res.data || [];
+      setTenants(Array.isArray(list) ? list : []);
+    } catch (err) {
+      console.warn('Failed to load tenants:', err);
+    } finally {
+      setLoadingTenants(false);
+    }
+  };
+
   useEffect(() => {
     if (user?.id) {
       fetchFamilyMembers();
+      fetchTenants();
     }
   }, [user?.id]);
 
@@ -328,6 +377,128 @@ export default function Profile() {
       await fetchFamilyMembers();
     } catch (err) {
       toast.error(err.response?.data?.message || 'Failed to restore family member');
+    }
+  };
+
+  const handleOpenAddTenant = () => {
+    setEditingTenant(null);
+    setTenantForm({
+      name: '',
+      dob: '',
+      blood_group: '',
+      phone: '',
+    });
+    setTenantAadharFile(null);
+    setTenantAadharPreview(null);
+    if (tenantAadharInputRef.current) {
+      tenantAadharInputRef.current.value = '';
+    }
+    setIsAddTenantOpen(true);
+  };
+
+  const handleOpenEditTenant = (tenant) => {
+    setEditingTenant(tenant);
+    setTenantForm({
+      name: tenant.name || '',
+      dob: tenant.dob ? tenant.dob.substring(0, 10) : '',
+      blood_group: tenant.blood_group || '',
+      phone: tenant.phone || '',
+    });
+    setTenantAadharFile(null);
+    setTenantAadharPreview(null);
+    if (tenantAadharInputRef.current) {
+      tenantAadharInputRef.current.value = '';
+    }
+    setIsAddTenantOpen(true);
+  };
+
+  const handleSaveTenant = async (e) => {
+    e.preventDefault();
+    if (!tenantForm.name.trim()) {
+      toast.error('Please enter the tenant name');
+      return;
+    }
+
+    try {
+      setSubmittingTenant(true);
+      const formData = new FormData();
+      formData.append('name', tenantForm.name.trim());
+      if (tenantForm.dob) formData.append('dob', tenantForm.dob);
+      if (tenantForm.blood_group) formData.append('blood_group', tenantForm.blood_group);
+      if (tenantForm.phone) formData.append('phone', tenantForm.phone.trim());
+
+      if (tenantAadharFile) {
+        formData.append('aadhar_proof', tenantAadharFile);
+      }
+
+      const headers = { 'Content-Type': 'multipart/form-data' };
+
+      if (editingTenant) {
+        await api.put(`/users/${user.id}/tenants/${editingTenant.id}`, formData, { headers });
+        toast.success('Tenant details updated successfully!');
+      } else {
+        await api.post(`/users/${user.id}/tenants`, formData, { headers });
+        toast.success('Tenant added successfully!');
+      }
+
+      setIsAddTenantOpen(false);
+      setEditingTenant(null);
+      setTenantAadharFile(null);
+      setTenantAadharPreview(null);
+      await fetchTenants();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to save tenant');
+    } finally {
+      setSubmittingTenant(false);
+    }
+  };
+
+  const handleOpenRemoveTenant = (tenant) => {
+    setRemovingTenant(tenant);
+    setTenantVacatePreset('Vacated / Lease Ended');
+    setTenantVacateCustom('');
+  };
+
+  const handleConfirmRemoveTenant = async (e) => {
+    e.preventDefault();
+    if (!removingTenant) return;
+
+    let finalReason = '';
+    if (tenantVacatePreset === 'Other') {
+      finalReason = tenantVacateCustom.trim();
+    } else {
+      finalReason = tenantVacateCustom.trim()
+        ? `${tenantVacatePreset} - ${tenantVacateCustom.trim()}`
+        : tenantVacatePreset;
+    }
+
+    if (!finalReason) {
+      toast.error('Please specify a reason for vacating');
+      return;
+    }
+
+    try {
+      setSubmittingTenantRemoval(true);
+      await api.delete(`/users/${user.id}/tenants/${removingTenant.id}`, {
+        data: { removal_reason: finalReason },
+      });
+      toast.success(`${removingTenant.name} marked as vacated.`);
+      setRemovingTenant(null);
+      await fetchTenants();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to update tenant status');
+    } finally {
+      setSubmittingTenantRemoval(false);
+    }
+  };
+
+  const handleRestoreTenant = async (tenant) => {
+    try {
+      await api.post(`/users/${user.id}/tenants/${tenant.id}/restore`);
+      toast.success(`${tenant.name} restored to active tenants!`);
+      await fetchTenants();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to restore tenant');
     }
   };
 
@@ -807,6 +978,14 @@ export default function Profile() {
             >
               <HiPencilSquare className="w-4 h-4" />
               <span>Edit Profile Details</span>
+            </button>
+
+            <button
+              onClick={() => setIsIdCardOpen(true)}
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-1.5 px-4 py-2.5 sm:py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 text-xs font-bold rounded-xl transition"
+            >
+              <HiIdentification className="w-4 h-4 text-indigo-600" />
+              <span>Digital ID Card</span>
             </button>
 
             <button
@@ -1517,6 +1696,274 @@ export default function Profile() {
           </div>
         )}
       </div>
+      )}
+
+      {/* Section 5: Tenant Registry & Rental Management - Excluded for Super Admin */}
+      {!isSuperAdmin && (
+        <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-100 shadow-sm space-y-4">
+          {/* Header */}
+          <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-gray-100">
+            <div className="flex items-center gap-2.5">
+              <div className="w-9 h-9 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center flex-shrink-0">
+                <HiHome className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm sm:text-base font-bold text-gray-900 leading-tight">
+                    Tenant Registry & Rental Management
+                  </h2>
+                  <span className="px-2 py-0.5 bg-indigo-50 border border-indigo-200 text-indigo-700 text-[11px] font-bold rounded-full">
+                    {tenants.filter((t) => t.is_active).length} Active
+                  </span>
+                </div>
+                <p className="text-xs text-gray-500 mt-0.5">
+                  Register tenants residing in your unit with Aadhaar proof verification, blood group, and contact details.
+                </p>
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleOpenAddTenant}
+              className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-xs transition flex-shrink-0"
+            >
+              <HiPlus className="w-4 h-4" />
+              <span>Add Tenant</span>
+            </button>
+          </div>
+
+          {/* Content */}
+          {loadingTenants ? (
+            <div className="py-8 flex items-center justify-center text-gray-400 gap-2">
+              <HiArrowPath className="w-5 h-5 animate-spin text-indigo-600" />
+              <span className="text-xs font-medium">Loading tenant records...</span>
+            </div>
+          ) : tenants.filter((t) => t.is_active).length === 0 ? (
+            <div className="py-8 px-4 text-center rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 flex flex-col items-center justify-center">
+              <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3 shadow-xs">
+                <HiHome className="w-6 h-6" />
+              </div>
+              <h4 className="text-xs sm:text-sm font-bold text-gray-800 mb-1">
+                No active tenants registered
+              </h4>
+              <p className="text-[11px] sm:text-xs text-gray-500 max-w-md mb-4">
+                If you have leased or rented your property, register tenant records with their Aadhaar proof, blood group, and date of birth for association security compliance.
+              </p>
+              <button
+                type="button"
+                onClick={handleOpenAddTenant}
+                className="inline-flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl shadow-xs transition"
+              >
+                <HiPlus className="w-4 h-4" />
+                <span>Add First Tenant</span>
+              </button>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
+              {tenants
+                .filter((t) => t.is_active)
+                .map((tenant) => {
+                  const age = calculateAge(tenant.dob);
+                  return (
+                    <div
+                      key={tenant.id}
+                      className="p-4 rounded-2xl border border-gray-200/80 bg-gradient-to-br from-white to-indigo-50/20 hover:border-indigo-200 transition shadow-xs flex flex-col justify-between space-y-3"
+                    >
+                      {/* Top Row: Name, Status Badge, Actions */}
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-700 font-extrabold text-sm flex items-center justify-center flex-shrink-0 shadow-xs">
+                            {tenant.name.charAt(0).toUpperCase()}
+                          </div>
+                          <div className="min-w-0">
+                            <h3 className="text-sm font-bold text-gray-900 truncate">
+                              {tenant.name}
+                            </h3>
+                            <span className="inline-block px-2 py-0.5 mt-0.5 bg-indigo-50 border border-indigo-200/80 text-indigo-700 font-bold text-[10px] rounded-md uppercase tracking-wider">
+                              Resident Tenant
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Action buttons */}
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => handleOpenEditTenant(tenant)}
+                            title="Edit Tenant Details"
+                            className="p-1.5 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                          >
+                            <HiPencilSquare className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleOpenRemoveTenant(tenant)}
+                            title="Mark as Vacated / Remove"
+                            className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                          >
+                            <HiTrash className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </div>
+
+                      {/* Metadata Grid */}
+                      <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100 text-xs">
+                        {/* DOB & Age */}
+                        <div className="p-2 bg-white rounded-xl border border-gray-100/90 flex flex-col">
+                          <span className="text-[10px] uppercase font-bold text-gray-400 flex items-center gap-1">
+                            <HiCalendar className="w-3.5 h-3.5 text-indigo-500" />
+                            <span>DOB & Age</span>
+                          </span>
+                          <span className="font-semibold text-gray-800 text-xs mt-0.5 truncate">
+                            {tenant.dob ? (
+                              <>
+                                {formatDob(tenant.dob)}
+                                {age !== null && (
+                                  <span className="text-gray-500 font-normal ml-1">
+                                    ({age} yrs)
+                                  </span>
+                                )}
+                              </>
+                            ) : (
+                              <span className="text-gray-400 italic">Not set</span>
+                            )}
+                          </span>
+                        </div>
+
+                        {/* Blood Group */}
+                        <div className="p-2 bg-white rounded-xl border border-gray-100/90 flex flex-col">
+                          <span className="text-[10px] uppercase font-bold text-gray-400 flex items-center gap-1">
+                            <HiHeart className="w-3.5 h-3.5 text-rose-500" />
+                            <span>Blood Group</span>
+                          </span>
+                          <div className="mt-0.5">
+                            {tenant.blood_group ? (
+                              <span className="inline-flex items-center px-2 py-0.5 bg-rose-50 border border-rose-200 text-rose-700 font-extrabold text-xs rounded-md">
+                                {tenant.blood_group}
+                              </span>
+                            ) : (
+                              <span className="text-gray-400 italic text-xs">Not specified</span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Contact / Phone */}
+                        <div className="p-2 bg-white rounded-xl border border-gray-100/90 flex flex-col">
+                          <span className="text-[10px] uppercase font-bold text-gray-400 flex items-center gap-1">
+                            <HiPhone className="w-3.5 h-3.5 text-blue-500" />
+                            <span>Contact Phone</span>
+                          </span>
+                          <span className="font-semibold text-gray-800 text-xs mt-0.5 truncate">
+                            {tenant.phone || <span className="text-gray-400 italic">Not recorded</span>}
+                          </span>
+                        </div>
+
+                        {/* Aadhaar Proof */}
+                        <div className="p-2 bg-white rounded-xl border border-gray-100/90 flex flex-col justify-between">
+                          <span className="text-[10px] uppercase font-bold text-gray-400 flex items-center gap-1">
+                            <HiIdentification className="w-3.5 h-3.5 text-amber-500" />
+                            <span>Aadhaar Proof</span>
+                          </span>
+                          <div className="mt-0.5">
+                            {tenant.aadhar_proof ? (
+                              <a
+                                href={resolveFileUrl(tenant.aadhar_proof)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 hover:underline"
+                              >
+                                <span>View Proof</span>
+                                <HiArrowTopRightOnSquare className="w-3 h-3" />
+                              </a>
+                            ) : (
+                              <span className="text-amber-600 italic text-[11px] font-medium">Pending upload</span>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+            </div>
+          )}
+
+          {/* Vacated Tenants Accordion / Toggle */}
+          {tenants.some((t) => !t.is_active) && (
+            <div className="pt-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setShowVacatedTenants(!showVacatedTenants)}
+                className="inline-flex items-center gap-2 text-xs font-bold text-gray-600 hover:text-gray-900 transition"
+              >
+                <HiClock className="w-4 h-4 text-gray-400" />
+                <span>
+                  {showVacatedTenants ? 'Hide' : 'View'} Past / Vacated Tenant Records (
+                  {tenants.filter((t) => !t.is_active).length})
+                </span>
+              </button>
+
+              {showVacatedTenants && (
+                <div className="mt-3 space-y-2">
+                  {tenants
+                    .filter((t) => !t.is_active)
+                    .map((vacated) => (
+                      <div
+                        key={vacated.id}
+                        className="p-3 bg-gray-50 rounded-xl border border-gray-200/70 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs"
+                      >
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-gray-900 line-through">
+                              {vacated.name}
+                            </span>
+                            <span className="px-1.5 py-0.5 bg-gray-200 text-gray-700 font-semibold text-[10px] rounded">
+                              Vacated
+                            </span>
+                            {vacated.blood_group && (
+                              <span className="px-1.5 py-0.5 bg-rose-50 text-rose-700 font-bold text-[10px] rounded">
+                                {vacated.blood_group}
+                              </span>
+                            )}
+                            {vacated.aadhar_proof && (
+                              <a
+                                href={resolveFileUrl(vacated.aadhar_proof)}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 text-[10px] font-bold text-indigo-600 hover:underline"
+                              >
+                                <span>Aadhaar</span>
+                                <HiArrowTopRightOnSquare className="w-3 h-3" />
+                              </a>
+                            )}
+                          </div>
+                          <div className="text-[11px] text-gray-500 mt-1 flex flex-wrap items-center gap-2">
+                            <span className="font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                              Reason: {vacated.removal_reason || 'Vacated'}
+                            </span>
+                            {vacated.removed_at && (
+                              <span className="text-gray-400">
+                                Vacated on {formatDob(vacated.removed_at)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRestoreTenant(vacated)}
+                          className="inline-flex items-center justify-center gap-1 px-3 py-1.5 bg-white hover:bg-gray-100 border border-gray-200 text-indigo-700 hover:text-indigo-800 font-bold rounded-lg transition text-xs shadow-xs flex-shrink-0"
+                          title="Restore tenant to active resident list"
+                        >
+                          <HiArrowUturnLeft className="w-3.5 h-3.5" />
+                          <span>Restore</span>
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       )}
 
       {/* Modal: Edit Registration & Profile Details (MATCHING REGISTRATION LAYOUT) */}
@@ -2438,6 +2885,307 @@ export default function Profile() {
           </form>
         )}
       </Modal>
+
+      {/* Modal: Add or Edit Tenant */}
+      <Modal
+        isOpen={isAddTenantOpen}
+        onClose={() => {
+          setIsAddTenantOpen(false);
+          setEditingTenant(null);
+        }}
+        title={editingTenant ? 'Edit Tenant Details' : 'Add Tenant'}
+        size="md"
+      >
+        <form onSubmit={handleSaveTenant} className="space-y-4">
+          <p className="text-xs text-gray-500">
+            {editingTenant
+              ? 'Update details or replace Aadhaar proof for this resident tenant.'
+              : 'Register a new tenant residing at your property with Aadhaar proof.'}
+          </p>
+
+          {/* Tenant Name */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">
+              Tenant Full Name *
+            </label>
+            <input
+              type="text"
+              required
+              value={tenantForm.name}
+              onChange={(e) => setTenantForm({ ...tenantForm, name: e.target.value })}
+              placeholder="e.g. Ramesh Kumar"
+              className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+            />
+          </div>
+
+          {/* Date of Birth & Blood Group */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                Date of Birth (DOB)
+              </label>
+              <input
+                type="date"
+                max={new Date().toISOString().split('T')[0]}
+                value={tenantForm.dob}
+                onChange={(e) => setTenantForm({ ...tenantForm, dob: e.target.value })}
+                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                Blood Group
+              </label>
+              <select
+                value={tenantForm.blood_group}
+                onChange={(e) => setTenantForm({ ...tenantForm, blood_group: e.target.value })}
+                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+              >
+                <option value="">Select Blood Group</option>
+                {BLOOD_GROUP_OPTIONS.map((bg) => (
+                  <option key={bg} value={bg}>
+                    {bg}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {tenantForm.dob && calculateAge(tenantForm.dob) !== null && (
+            <div className="px-3 py-2 bg-indigo-50 rounded-xl border border-indigo-100 text-xs text-indigo-800 font-medium flex items-center justify-between">
+              <span>Calculated Age:</span>
+              <span className="font-bold">{calculateAge(tenantForm.dob)} Years old</span>
+            </div>
+          )}
+
+          {/* Aadhaar Proof Document */}
+          <div>
+            <div className="flex items-center justify-between mb-1">
+              <label className="block text-xs font-bold text-gray-700">
+                Aadhaar Proof Document
+              </label>
+              {editingTenant?.aadhar_proof && (
+                <a
+                  href={resolveFileUrl(editingTenant.aadhar_proof)}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-indigo-600 hover:underline"
+                >
+                  <span>Current Proof</span>
+                  <HiArrowTopRightOnSquare className="w-3 h-3" />
+                </a>
+              )}
+            </div>
+
+            <input
+              type="file"
+              ref={tenantAadharInputRef}
+              accept="image/*,application/pdf"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (!file) return;
+                if (file.size > 10 * 1024 * 1024) {
+                  toast.error('File exceeds 10MB limit.');
+                  return;
+                }
+                setTenantAadharFile(file);
+                if (file.type.startsWith('image/')) {
+                  const url = URL.createObjectURL(file);
+                  setTenantAadharPreview(url);
+                } else {
+                  setTenantAadharPreview(null);
+                }
+              }}
+            />
+
+            <div
+              onClick={() => tenantAadharInputRef.current?.click()}
+              className="cursor-pointer border-2 border-dashed border-gray-200 hover:border-indigo-400 bg-gray-50/70 hover:bg-indigo-50/20 rounded-xl p-3.5 transition flex flex-col items-center justify-center text-center"
+            >
+              {tenantAadharFile ? (
+                <div className="flex items-center justify-between w-full px-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <HiDocumentText className="w-5 h-5 text-indigo-600 flex-shrink-0" />
+                    <div className="text-left min-w-0">
+                      <p className="text-xs font-bold text-gray-900 truncate">
+                        {tenantAadharFile.name}
+                      </p>
+                      <p className="text-[10px] text-gray-400">
+                        {formatFileSize(tenantAadharFile.size)} - Click to change
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setTenantAadharFile(null);
+                      setTenantAadharPreview(null);
+                      if (tenantAadharInputRef.current) {
+                        tenantAadharInputRef.current.value = '';
+                      }
+                    }}
+                    className="p-1 text-gray-400 hover:text-rose-600 rounded-lg"
+                  >
+                    <HiXMark className="w-4 h-4" />
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <HiArrowUpTray className="w-5 h-5 text-indigo-500 mb-1" />
+                  <p className="text-xs font-bold text-gray-700">
+                    {editingTenant?.aadhar_proof ? 'Upload New Aadhaar Proof to Replace' : 'Upload Aadhaar Proof (Card/PDF)'}
+                  </p>
+                  <p className="text-[10px] text-gray-400 mt-0.5">
+                    PNG, JPG, PDF up to 10MB
+                  </p>
+                </>
+              )}
+            </div>
+
+            {tenantAadharPreview && (
+              <div className="mt-2 relative w-24 h-16 rounded-lg overflow-hidden border border-gray-200 shadow-xs">
+                <img src={tenantAadharPreview} alt="Aadhaar Preview" className="w-full h-full object-cover" />
+              </div>
+            )}
+          </div>
+
+          {/* Contact / Phone */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">
+              Contact / Mobile Number
+            </label>
+            <input
+              type="tel"
+              value={tenantForm.phone}
+              onChange={(e) => setTenantForm({ ...tenantForm, phone: e.target.value })}
+              placeholder="e.g. 9876543210 (Optional)"
+              className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-indigo-500 text-gray-900"
+            />
+          </div>
+
+          {/* Modal Actions */}
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={() => {
+                setIsAddTenantOpen(false);
+                setEditingTenant(null);
+              }}
+              className="px-4 py-2 border border-gray-200 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-100 transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submittingTenant}
+              className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl transition shadow-xs disabled:opacity-50"
+            >
+              {submittingTenant
+                ? 'Saving...'
+                : editingTenant
+                ? 'Update Tenant Details'
+                : 'Add Tenant'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal: Vacate Tenant Confirmation */}
+      <Modal
+        isOpen={!!removingTenant}
+        onClose={() => setRemovingTenant(null)}
+        title="Mark Tenant as Vacated"
+        size="md"
+      >
+        {removingTenant && (
+          <form onSubmit={handleConfirmRemoveTenant} className="space-y-4">
+            <div className="p-3.5 bg-amber-50 rounded-2xl border border-amber-200/80 flex items-start gap-3">
+              <div className="w-8 h-8 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <HiExclamationTriangle className="w-5 h-5" />
+              </div>
+              <div className="text-xs text-amber-900">
+                <p className="font-bold">
+                  Mark {removingTenant.name} as Vacated?
+                </p>
+                <p className="mt-0.5 text-amber-700 leading-relaxed">
+                  This tenant will be moved to the past tenancy records. A reason for departure is required for community security auditing.
+                </p>
+              </div>
+            </div>
+
+            {/* Vacate Reason Preset */}
+            <div>
+              <label className="block text-xs font-bold text-gray-800 mb-1">
+                Reason for Vacating *
+              </label>
+              <select
+                required
+                value={tenantVacatePreset}
+                onChange={(e) => setTenantVacatePreset(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 text-gray-900"
+              >
+                {TENANT_VACATE_PRESETS.map((reason) => (
+                  <option key={reason} value={reason}>
+                    {reason}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Custom Notes */}
+            <div>
+              <label className="block text-xs font-bold text-gray-800 mb-1">
+                {tenantVacatePreset === 'Other'
+                  ? 'Please Specify Reason *'
+                  : 'Additional Notes / Explanation (Optional)'}
+              </label>
+              <textarea
+                rows={3}
+                required={tenantVacatePreset === 'Other'}
+                value={tenantVacateCustom}
+                onChange={(e) => setTenantVacateCustom(e.target.value)}
+                placeholder={
+                  tenantVacatePreset === 'Other'
+                    ? 'Enter the reason for vacating...'
+                    : 'Any lease closure notes...'
+                }
+                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-amber-500 text-gray-900"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setRemovingTenant(null)}
+                className="px-4 py-2 border border-gray-200 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-100 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submittingTenantRemoval}
+                className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl transition shadow-xs disabled:opacity-50"
+              >
+                {submittingTenantRemoval ? 'Saving...' : 'Confirm Vacate'}
+              </button>
+            </div>
+          </form>
+        )}
+      </Modal>
+
+      {/* Digital ID Card Modal */}
+      {isIdCardOpen && (
+        <DigitalIdCardModal
+          isOpen={isIdCardOpen}
+          onClose={() => setIsIdCardOpen(false)}
+          user={profileData}
+          associationName={profileData.association_name}
+        />
+      )}
     </div>
   );
 }

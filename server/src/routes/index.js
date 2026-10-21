@@ -75,4 +75,8 @@ router.use('/notifications', notificationRoutes);
 const auditRoutes = safeLoadRoute(['audit.routes.js', 'audit.js'], 'Audit Log');
 router.use('/audit', auditRoutes);
 
+// 13. Event Captures (Photos & Videos) routes
+const eventCaptureRoutes = safeLoadRoute(['eventCapture.routes.js', 'event-captures.routes.js', 'eventCaptures.routes.js'], 'Event Captures');
+router.use('/event-captures', eventCaptureRoutes);
+
 module.exports = router;

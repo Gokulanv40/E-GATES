@@ -26,12 +26,11 @@ export default function AdminSOSContacts() {
   const [isConfigModalOpen, setIsConfigModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Form State with 4 primary contacts: Member 1, Member 2, Police, and Family Member Contact
+  // Form State with 3 Association Default contacts: Member 1, Member 2, and Police
   const [formState, setFormState] = useState({
     member1: { user_id: '', name: '', phone: '', designation: '' },
     member2: { user_id: '', name: '', phone: '', designation: '' },
     police: { name: '', phone: '', designation: 'Station House Officer / Police Control' },
-    family: { name: '', phone: '', designation: 'Primary Family / Next of Kin Contact' },
   });
 
   const fetchData = useCallback(async () => {
@@ -59,7 +58,6 @@ export default function AdminSOSContacts() {
       // Populate form state from loaded contacts
       const memberContacts = loadedContacts.filter((c) => c.contact_type === 'member');
       const policeContact = loadedContacts.find((c) => c.contact_type === 'police');
-      const familyContact = loadedContacts.find((c) => c.contact_type === 'family');
 
       setFormState({
         member1: memberContacts[0]
@@ -85,13 +83,6 @@ export default function AdminSOSContacts() {
               designation: policeContact.designation || 'Station House Officer / Police Control',
             }
           : { name: '', phone: '', designation: 'Station House Officer / Police Control' },
-        family: familyContact
-          ? {
-              name: familyContact.name || '',
-              phone: familyContact.phone || '',
-              designation: familyContact.designation || 'Family / Relative Emergency Contact',
-            }
-          : { name: '', phone: '', designation: 'Family / Relative Emergency Contact' },
       });
     } catch (err) {
       console.error('Failed to load SOS contacts:', err);
@@ -185,20 +176,10 @@ export default function AdminSOSContacts() {
       designation: formState.police.designation.trim() || 'Police Station Contact',
     });
 
-    if (formState.family.name && formState.family.phone) {
-      payload.push({
-        contact_type: 'family',
-        user_id: null,
-        name: formState.family.name.trim(),
-        phone: formState.family.phone.trim(),
-        designation: formState.family.designation.trim() || 'Family / Relative Contact',
-      });
-    }
-
     try {
       setSubmitting(true);
       await api.post('/sos/contacts', { contacts: payload });
-      toast.success('Emergency contacts configured successfully!');
+      toast.success('Association default emergency contacts configured successfully!');
       setIsConfigModalOpen(false);
       fetchData();
     } catch (err) {
@@ -210,7 +191,6 @@ export default function AdminSOSContacts() {
 
   const memberContacts = contacts.filter((c) => c.contact_type === 'member');
   const policeContact = contacts.find((c) => c.contact_type === 'police');
-  const familyContact = contacts.find((c) => c.contact_type === 'family');
 
   return (
     <div className="space-y-6">
@@ -245,17 +225,20 @@ export default function AdminSOSContacts() {
       </div>
 
       {/* Notice Banner */}
-      <div className="bg-rose-50 border border-rose-200 rounded-2xl p-4 flex items-start gap-3">
-        <HiHeart className="w-5 h-5 text-rose-600 flex-shrink-0 mt-0.5" />
-        <div className="text-xs text-rose-900">
-          <p className="font-bold">Multi-Channel Rapid Alert Network:</p>
-          <p className="mt-0.5">
-            When any layout resident triggers the SOS distress alarm, immediate automated SMS notifications with exact Google Maps coordinates are dispatched to verified Community Responders, Police, and Family Member emergency contacts.
+      <div className="bg-indigo-50 border border-indigo-200 rounded-2xl p-4 flex items-start gap-3">
+        <HiShieldExclamation className="w-5 h-5 text-indigo-600 flex-shrink-0 mt-0.5" />
+        <div className="text-xs text-indigo-950 space-y-1">
+          <p className="font-bold">Association Default SOS Contacts:</p>
+          <p className="leading-relaxed text-indigo-900">
+            These 3 contacts (2 Community Member Responders + 1 Police Station) are the <strong>default emergency contacts for all members</strong> of this association. Only Administrators can change these association-wide contacts.
+          </p>
+          <p className="text-[11px] text-indigo-700 font-medium">
+            💡 Individual members can configure and edit their own personal Family Emergency Contact directly in their User Portal.
           </p>
         </div>
       </div>
 
-      {/* 4 Contact Cards Grid */}
+      {/* 4 Contact Cards Grid (3 Editable by Admin, 1 Family Contact Disabled) */}
       {loading ? (
         <div className="py-16 bg-white rounded-2xl border border-gray-100">
           <LoadingSpinner message="Loading emergency contacts..." />
@@ -412,54 +395,43 @@ export default function AdminSOSContacts() {
             </button>
           </div>
 
-          {/* 4. Family Member Contact */}
-          <div className="bg-white rounded-2xl p-5 border-2 border-rose-200 shadow-sm flex flex-col justify-between hover:border-rose-400 transition bg-gradient-to-b from-rose-50/20 to-white">
+          {/* 4. Family Member Contact - DISABLED & NOT EDITABLE IN ADMIN PANEL */}
+          <div className="bg-gray-50/90 rounded-2xl p-5 border-2 border-dashed border-gray-300 shadow-sm flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between mb-3">
                 <span className="text-[10px] font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full bg-rose-100 text-rose-800 flex items-center gap-1">
                   <HiHeart className="w-3 h-3 text-rose-500" /> Family Contact
                 </span>
-                <span className="w-7 h-7 rounded-full bg-rose-50 text-rose-600 flex items-center justify-center font-bold text-xs">
-                  👨‍👩‍👧
+                <span className="text-[10px] font-bold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200">
+                  🔒 Disabled for Admin
                 </span>
               </div>
 
-              {familyContact ? (
-                <div className="space-y-3">
-                  <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center text-base font-bold">
-                      {familyContact.name.charAt(0)}
-                    </div>
-                    <div>
-                      <h3 className="text-sm font-bold text-gray-900">{familyContact.name}</h3>
-                      <p className="text-xs text-rose-600 font-semibold">{familyContact.designation || 'Family Emergency Contact'}</p>
-                    </div>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-gray-200 text-gray-600 flex items-center justify-center text-base font-bold">
+                    👨‍👩‍👧
                   </div>
+                  <div>
+                    <h3 className="text-sm font-bold text-gray-800">Family Emergency Contact</h3>
+                    <p className="text-xs text-gray-500">Resident Personal Contact</p>
+                  </div>
+                </div>
 
-                  <div className="bg-rose-50/60 rounded-xl p-3 border border-rose-100">
-                    <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">Family Emergency Phone</span>
-                    <a
-                      href={`tel:${familyContact.phone}`}
-                      className="text-xs font-bold text-rose-700 hover:underline flex items-center gap-1.5"
-                    >
-                      <HiPhone className="w-3.5 h-3.5 text-rose-600" />
-                      {familyContact.phone}
-                    </a>
-                  </div>
+                <div className="bg-white rounded-xl p-3 border border-gray-200 text-xs text-gray-600 space-y-1">
+                  <p className="font-bold text-gray-800 flex items-center gap-1 text-[11px]">
+                    <span>🔒 Not Editable by Admin</span>
+                  </p>
+                  <p className="text-[11px] text-gray-500 leading-relaxed">
+                    Family contact numbers are personal to each member and can only be edited by members in their member portal.
+                  </p>
                 </div>
-              ) : (
-                <div className="py-6 text-center text-xs text-gray-400 italic">
-                  No family contact added yet.
-                </div>
-              )}
+              </div>
             </div>
 
-            <button
-              onClick={() => setIsConfigModalOpen(true)}
-              className="mt-4 w-full py-1.5 text-xs font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 rounded-lg transition"
-            >
-              {familyContact ? 'Edit Family Contact' : '+ Add Family Contact'}
-            </button>
+            <div className="mt-4 w-full py-2 px-3 text-center text-xs font-bold text-gray-400 bg-gray-100 border border-gray-200 rounded-lg cursor-not-allowed">
+              🔒 Non-Editable in Admin Panel
+            </div>
           </div>
         </div>
       )}
@@ -472,6 +444,9 @@ export default function AdminSOSContacts() {
         size="lg"
       >
         <form onSubmit={handleSaveContacts} className="space-y-5">
+          <p className="text-xs text-gray-500">
+            Configure the 3 association default emergency responders. The 4th family contact is personal to residents and is non-editable in the Admin panel.
+          </p>
           {/* 1. Member 1 */}
           <div className="bg-blue-50/40 p-3.5 rounded-xl border border-blue-100 space-y-2.5">
             <div className="flex items-center justify-between">
@@ -662,64 +637,35 @@ export default function AdminSOSContacts() {
             </div>
           </div>
 
-          {/* 4. Family Member Emergency Contact */}
-          <div className="bg-rose-50/40 p-3.5 rounded-xl border border-rose-200 space-y-2.5">
+          {/* 4. Family Member Contact - DISABLED FOR ADMIN */}
+          <div className="bg-gray-50 p-3.5 rounded-xl border border-dashed border-gray-300 space-y-2">
             <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold text-rose-900 uppercase flex items-center gap-1">
-                <HiHeart className="w-3.5 h-3.5 text-rose-500" />
-                4. Family Member / Next of Kin Emergency Contact
+              <h3 className="text-xs font-bold text-gray-700 uppercase flex items-center gap-1.5">
+                <HiHeart className="w-3.5 h-3.5 text-rose-400" />
+                4. Personal Family Emergency Contact
               </h3>
-              <span className="text-[10px] text-rose-600 font-medium">New Feature</span>
+              <span className="text-[10px] font-bold text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-md flex items-center gap-1">
+                🔒 Disabled (Editable by Member Only)
+              </span>
             </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-0.5">Family Member Name</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Resident Family Liaison / Kin"
-                  value={formState.family.name}
-                  onChange={(e) =>
-                    setFormState({
-                      ...formState,
-                      family: { ...formState.family, name: e.target.value },
-                    })
-                  }
-                  className="w-full text-xs px-2.5 py-1.5 border border-gray-300 rounded-lg focus:ring-1 focus:ring-primary-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-[11px] font-semibold text-gray-700 mb-0.5">Family Phone Number</label>
-                <input
-                  type="tel"
-                  placeholder="e.g. Mobile number for urgent family dispatch"
-                  value={formState.family.phone}
-                  onChange={(e) =>
-                    setFormState({
-                      ...formState,
-                      family: { ...formState.family, phone: e.target.value },
-                    })
-                  }
-                  className="w-full text-xs px-2.5 py-1.5 border border-gray-300 rounded-lg focus:ring-1 focus:ring-primary-500"
-                />
-              </div>
-
-              <div className="sm:col-span-2">
-                <label className="block text-[11px] font-semibold text-gray-700 mb-0.5">Relationship / Designation Notes</label>
-                <input
-                  type="text"
-                  placeholder="e.g. Association Family Welfare Coordinator / Primary Family Kin"
-                  value={formState.family.designation}
-                  onChange={(e) =>
-                    setFormState({
-                      ...formState,
-                      family: { ...formState.family, designation: e.target.value },
-                    })
-                  }
-                  className="w-full text-xs px-2.5 py-1.5 border border-gray-300 rounded-lg focus:ring-1 focus:ring-primary-500"
-                />
-              </div>
+            <p className="text-[11px] text-gray-500 leading-relaxed">
+              Family emergency contact numbers cannot be edited by administrators. Each resident configures their own personal family emergency number in their user portal.
+            </p>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-1">
+              <input
+                type="text"
+                disabled
+                readOnly
+                value="Configured individually by residents"
+                className="w-full text-xs px-2.5 py-1.5 bg-gray-100 text-gray-400 border border-gray-200 rounded-lg cursor-not-allowed font-medium"
+              />
+              <input
+                type="text"
+                disabled
+                readOnly
+                value="🔒 Non-editable in Admin Panel"
+                className="w-full text-xs px-2.5 py-1.5 bg-gray-100 text-gray-400 border border-gray-200 rounded-lg cursor-not-allowed font-medium"
+              />
             </div>
           </div>
 

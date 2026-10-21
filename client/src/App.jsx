@@ -32,10 +32,12 @@ const VotingManage = lazy(() => import('./pages/admin/VotingManage'));
 const AdminComplaints = lazy(() => import('./pages/admin/AdminComplaints'));
 const AdminMaintenance = lazy(() => import('./pages/admin/AdminMaintenance'));
 const Events = lazy(() => import('./pages/admin/Events'));
+const EventCaptures = lazy(() => import('./pages/admin/EventCaptures'));
 const Documents = lazy(() => import('./pages/admin/Documents'));
 
 // Member Pages
 const MemberDashboard = lazy(() => import('./pages/member/Dashboard'));
+const MemberSOSContacts = lazy(() => import('./pages/member/SOSContacts'));
 const NewsFeed = lazy(() => import('./pages/member/NewsFeed'));
 const VotingPage = lazy(() => import('./pages/member/VotingPage'));
 const MemberComplaints = lazy(() => import('./pages/member/Complaints'));
@@ -115,6 +117,7 @@ export default function App() {
           <Route path="approvals" element={<PendingApprovals />} />
           <Route path="users" element={<ManageUsers />} />
           <Route path="events" element={<Events />} />
+          <Route path="event-captures" element={<EventCaptures />} />
           <Route path="polls" element={<PollResults />} />
           <Route path="sos-reports" element={<SOSReports />} />
           <Route path="audit-log" element={<AuditLog />} />
@@ -145,6 +148,7 @@ export default function App() {
           <Route path="complaints" element={<AdminComplaints />} />
           <Route path="maintenance" element={<AdminMaintenance />} />
           <Route path="events" element={<Events />} />
+          <Route path="event-captures" element={<EventCaptures />} />
           <Route path="documents" element={<Documents />} />
           <Route path="profile" element={<Profile />} />
           <Route path="*" element={<Navigate to="dashboard" replace />} />
@@ -163,7 +167,9 @@ export default function App() {
         >
           <Route index element={<Navigate to="dashboard" replace />} />
           <Route path="dashboard" element={<MemberDashboard />} />
+          <Route path="sos-contacts" element={<MemberSOSContacts />} />
           <Route path="events" element={<Events />} />
+          <Route path="event-captures" element={<EventCaptures />} />
           <Route path="news" element={<NewsFeed />} />
           <Route path="voting" element={<VotingPage />} />
           <Route path="complaints" element={<MemberComplaints />} />

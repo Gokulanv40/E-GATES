@@ -20,9 +20,12 @@ async function getEmbeddedDb() {
   if (fs.existsSync(dbFilePath)) {
     const fileBuffer = fs.readFileSync(dbFilePath);
     db = new SQL.Database(fileBuffer);
+    ensureSchemaMigrations(db);
+    saveDb(db);
   } else {
     db = new SQL.Database();
     initSchemaAndSeed(db);
+    ensureSchemaMigrations(db);
     saveDb(db);
   }
 
@@ -37,6 +40,97 @@ function saveDb(db) {
     fs.writeFileSync(dbFilePath, buffer);
   } catch (err) {
     console.error('[EmbeddedDB Save Error]:', err.message);
+  }
+}
+
+function ensureSchemaMigrations(db) {
+  try {
+    // 1. Ensure new tables
+    db.run(`
+      CREATE TABLE IF NOT EXISTS event_captures (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        association_id INTEGER NOT NULL REFERENCES associations(id) ON DELETE CASCADE,
+        event_id INTEGER REFERENCES events(id) ON DELETE SET NULL,
+        uploaded_by INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        title TEXT NOT NULL,
+        description TEXT,
+        event_name TEXT,
+        media_type TEXT DEFAULT 'photo',
+        file_path TEXT,
+        file_name TEXT,
+        file_size INTEGER,
+        mime_type TEXT,
+        thumbnail_path TEXT,
+        event_date TEXT,
+        likes_count INTEGER DEFAULT 0,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_event_captures_assoc ON event_captures(association_id);
+      CREATE INDEX IF NOT EXISTS idx_event_captures_event ON event_captures(event_id);
+      CREATE INDEX IF NOT EXISTS idx_event_captures_type ON event_captures(media_type);
+
+      CREATE TABLE IF NOT EXISTS family_members (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        relation TEXT NOT NULL,
+        dob TEXT,
+        blood_group TEXT,
+        phone TEXT,
+        is_active INTEGER DEFAULT 1,
+        removal_reason TEXT,
+        removed_at TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_family_members_user ON family_members(user_id);
+
+      CREATE TABLE IF NOT EXISTS tenants (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        dob TEXT,
+        blood_group TEXT,
+        aadhar_proof TEXT,
+        phone TEXT,
+        email TEXT,
+        is_active INTEGER DEFAULT 1,
+        removal_reason TEXT,
+        removed_at TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_tenants_user ON tenants(user_id);
+    `);
+
+    // 2. Ensure missing columns on users
+    const userRes = db.exec("PRAGMA table_info(users);");
+    const userCols = userRes[0]?.values.map((v) => v[1]) || [];
+    if (!userCols.includes('is_main_admin')) {
+      db.run("ALTER TABLE users ADD COLUMN is_main_admin INTEGER DEFAULT 0;");
+    }
+    if (!userCols.includes('profile_photo')) {
+      db.run("ALTER TABLE users ADD COLUMN profile_photo TEXT;");
+    }
+    if (!userCols.includes('blood_group')) {
+      db.run("ALTER TABLE users ADD COLUMN blood_group TEXT;");
+    }
+    if (!userCols.includes('dob')) {
+      db.run("ALTER TABLE users ADD COLUMN dob TEXT;");
+    }
+    if (!userCols.includes('aadhaar_number')) {
+      db.run("ALTER TABLE users ADD COLUMN aadhaar_number TEXT;");
+    }
+
+    // 3. Ensure missing columns on associations
+    const assocRes = db.exec("PRAGMA table_info(associations);");
+    const assocCols = assocRes[0]?.values.map((v) => v[1]) || [];
+    if (!assocCols.includes('main_admin_id')) {
+      db.run("ALTER TABLE associations ADD COLUMN main_admin_id INTEGER;");
+    }
+  } catch (err) {
+    console.error('[EmbeddedDB Migration Error]:', err.message);
   }
 }
 

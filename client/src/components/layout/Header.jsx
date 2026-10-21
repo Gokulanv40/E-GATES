@@ -7,11 +7,13 @@ import {
   HiUser,
   HiChevronDown,
   HiCheckBadge,
+  HiIdentification,
 } from 'react-icons/hi2';
 import { useAuth } from '../../hooks/useAuth';
 import { useLanguage } from '../../context/LanguageContext';
 import ThemeToggle from '../common/ThemeToggle';
 import PoweredByLogo from '../common/PoweredByLogo';
+import DigitalIdCardModal from '../common/DigitalIdCardModal';
 import api from '../../services/api';
 
 export default function Header({ onMenuToggle, associationName }) {
@@ -23,6 +25,7 @@ export default function Header({ onMenuToggle, associationName }) {
   const [unreadCount, setUnreadCount] = useState(0);
   const [notifications, setNotifications] = useState([]);
   const [notifDropdownOpen, setNotifDropdownOpen] = useState(false);
+  const [showIdCard, setShowIdCard] = useState(false);
 
   const userMenuRef = useRef(null);
   const notifMenuRef = useRef(null);
@@ -128,14 +131,19 @@ export default function Header({ onMenuToggle, associationName }) {
           <HiBars3 className="w-5 h-5 sm:w-6 sm:h-6" />
         </button>
 
-        <div className="flex items-center gap-1.5 sm:gap-2">
-          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-primary-600 text-white flex items-center justify-center font-bold text-sm sm:text-lg shadow-sm flex-shrink-0">
+        <button
+          type="button"
+          onClick={() => setShowIdCard(true)}
+          title="Click to view Digital ID Card"
+          className="flex items-center gap-1.5 sm:gap-2 text-left hover:opacity-85 transition focus:outline-none cursor-pointer group"
+        >
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-primary-600 text-white flex items-center justify-center font-bold text-sm sm:text-lg shadow-sm flex-shrink-0 group-hover:bg-primary-500 transition">
             LA
           </div>
-          <span className="font-bold text-gray-900 dark:text-white hidden md:inline-block tracking-tight text-base">
+          <span className="font-bold text-gray-900 dark:text-white hidden md:inline-block tracking-tight text-base group-hover:text-primary-600 dark:group-hover:text-primary-400 transition">
             Association
           </span>
-        </div>
+        </button>
       </div>
 
       {/* Top Center: Powered by Logo & Association Name */}
@@ -294,6 +302,18 @@ export default function Header({ onMenuToggle, associationName }) {
                   <HiUser className="w-4 h-4 text-gray-400" />
                   <span>{t('nav_profile')}</span>
                 </Link>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setUserMenuOpen(false);
+                    setShowIdCard(true);
+                  }}
+                  className="w-full flex items-center gap-2.5 px-4 py-2 text-xs text-gray-700 dark:text-gray-200 hover:bg-gray-50 dark:hover:bg-slate-800 transition text-left"
+                >
+                  <HiIdentification className="w-4 h-4 text-primary-500" />
+                  <span>Digital ID Card</span>
+                </button>
               </div>
 
               <div className="border-t border-gray-100 dark:border-slate-800 pt-1">
@@ -310,6 +330,16 @@ export default function Header({ onMenuToggle, associationName }) {
           )}
         </div>
       </div>
+
+      {/* Digital ID Card Modal */}
+      {showIdCard && (
+        <DigitalIdCardModal
+          isOpen={showIdCard}
+          onClose={() => setShowIdCard(false)}
+          user={user}
+          associationName={displayedTitle}
+        />
+      )}
     </header>
   );
 }

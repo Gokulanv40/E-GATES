@@ -336,12 +336,16 @@ export default function FloatingSOS() {
                     >
                       <div>
                         <div className="flex items-center justify-between gap-1">
-                          <span className="text-[10px] font-bold uppercase tracking-wider text-primary-600 bg-primary-50 px-1.5 py-0.5 rounded">
+                          <span className={`text-[10px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded ${
+                            contact.contact_type === 'family'
+                              ? 'text-rose-700 bg-rose-50 border border-rose-200'
+                              : 'text-primary-600 bg-primary-50'
+                          }`}>
                             {contact.contact_type === 'member'
                               ? `Community Member`
                               : contact.contact_type === 'police'
                               ? 'Police Department'
-                              : 'Family Contact'}
+                              : '❤️ Your Family Contact'}
                           </span>
                           <span className="text-[10px] text-emerald-600 font-bold flex items-center gap-0.5">
                             <HiCheckCircle className="w-3 h-3" />
