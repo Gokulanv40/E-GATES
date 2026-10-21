@@ -680,11 +680,11 @@ export default function Register() {
                     </div>
                   </div>
 
-                  {/* Section 3: Main Admin Address within layout */}
+                  {/* Section 3: Main Admin Address */}
                   <div className="space-y-4">
                     <h3 className="text-xs font-bold uppercase tracking-wider text-purple-800 flex items-center gap-2 border-b pb-2">
                       <HiHome className="w-4 h-4 text-purple-600" />
-                      3. Main Admin Layout Address Details
+                      3. Main Admin Address Details
                     </h3>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
