@@ -19,6 +19,7 @@ import { useAuth } from '../../hooks/useAuth';
 import { useLanguage } from '../../context/LanguageContext';
 import FileUpload from '../../components/common/FileUpload';
 import PoweredByLogo from '../../components/common/PoweredByLogo';
+import Modal from '../../components/common/Modal';
 import api from '../../services/api';
 
 export default function Register() {
@@ -64,6 +65,7 @@ export default function Register() {
   const [memberProfilePhoto, setMemberProfilePhoto] = useState(null);
   const [memberPhotoPreview, setMemberPhotoPreview] = useState(null);
   const memberPhotoInputRef = useRef(null);
+  const memberCameraInputRef = useRef(null);
 
   // 2. Admin Form State (for existing association)
   const [adminForm, setAdminForm] = useState({
@@ -85,6 +87,7 @@ export default function Register() {
   const [adminProfilePhoto, setAdminProfilePhoto] = useState(null);
   const [adminPhotoPreview, setAdminPhotoPreview] = useState(null);
   const adminPhotoInputRef = useRef(null);
+  const adminCameraInputRef = useRef(null);
 
   // 3. Association + Admin Form State (Combined new association creation)
   const [assocAdminForm, setAssocAdminForm] = useState({
@@ -108,6 +111,122 @@ export default function Register() {
   const [assocAdminProfilePhoto, setAssocAdminProfilePhoto] = useState(null);
   const [assocAdminPhotoPreview, setAssocAdminPhotoPreview] = useState(null);
   const assocAdminPhotoInputRef = useRef(null);
+  const assocAdminCameraInputRef = useRef(null);
+
+  // Camera Modal State & Handlers
+  const [cameraModalOpen, setCameraModalOpen] = useState(false);
+  const [cameraTarget, setCameraTarget] = useState('member'); // 'member' | 'admin' | 'assoc-admin'
+  const [cameraStream, setCameraStream] = useState(null);
+  const [cameraError, setCameraError] = useState('');
+  const [capturedBlob, setCapturedBlob] = useState(null);
+  const [capturedPreview, setCapturedPreview] = useState(null);
+  const videoRef = useRef(null);
+
+  // Bind video element when stream is active
+  useEffect(() => {
+    if (cameraModalOpen && cameraStream && videoRef.current) {
+      videoRef.current.srcObject = cameraStream;
+      videoRef.current.play().catch((err) => console.warn('Camera play warning:', err));
+    }
+  }, [cameraModalOpen, cameraStream]);
+
+  // Clean up camera stream on unmount
+  useEffect(() => {
+    return () => {
+      if (cameraStream) {
+        cameraStream.getTracks().forEach((track) => track.stop());
+      }
+    };
+  }, [cameraStream]);
+
+  const openCameraModal = async (target) => {
+    setCameraTarget(target);
+    setCameraError('');
+    setCapturedBlob(null);
+    setCapturedPreview(null);
+    setCameraModalOpen(true);
+
+    try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error('Webcam is not directly accessible. Please use device camera.');
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: 'user', width: { ideal: 640 }, height: { ideal: 640 } },
+        audio: false,
+      });
+      setCameraStream(stream);
+    } catch (err) {
+      console.warn('Camera stream error:', err);
+      setCameraError(
+        'Unable to open webcam stream. You can still use your native device camera below.'
+      );
+    }
+  };
+
+  const closeCameraModal = () => {
+    if (cameraStream) {
+      cameraStream.getTracks().forEach((track) => track.stop());
+      setCameraStream(null);
+    }
+    setCapturedBlob(null);
+    setCapturedPreview(null);
+    setCameraModalOpen(false);
+  };
+
+  const handleCaptureSnapshot = () => {
+    if (!videoRef.current) return;
+    const video = videoRef.current;
+    const canvas = document.createElement('canvas');
+    const vw = video.videoWidth || 640;
+    const vh = video.videoHeight || 640;
+    const size = Math.min(vw, vh);
+    canvas.width = size;
+    canvas.height = size;
+    const ctx = canvas.getContext('2d');
+
+    // Center-crop to square portrait
+    const sx = (vw - size) / 2;
+    const sy = (vh - size) / 2;
+    ctx.drawImage(video, sx, sy, size, size, 0, 0, size, size);
+
+    canvas.toBlob(
+      (blob) => {
+        if (blob) {
+          const file = new File([blob], `profile_${Date.now()}.jpg`, { type: 'image/jpeg' });
+          setCapturedBlob(file);
+          setCapturedPreview(canvas.toDataURL('image/jpeg', 0.92));
+        }
+      },
+      'image/jpeg',
+      0.92
+    );
+  };
+
+  const handleConfirmCapturedPhoto = () => {
+    if (!capturedBlob || !capturedPreview) return;
+    if (cameraTarget === 'member') {
+      setMemberProfilePhoto(capturedBlob);
+      setMemberPhotoPreview(capturedPreview);
+    } else if (cameraTarget === 'admin') {
+      setAdminProfilePhoto(capturedBlob);
+      setAdminPhotoPreview(capturedPreview);
+    } else if (cameraTarget === 'assoc-admin') {
+      setAssocAdminProfilePhoto(capturedBlob);
+      setAssocAdminPhotoPreview(capturedPreview);
+    }
+    closeCameraModal();
+  };
+
+  const triggerNativeCamera = () => {
+    closeCameraModal();
+    if (cameraTarget === 'member') {
+      memberCameraInputRef.current?.click();
+    } else if (cameraTarget === 'admin') {
+      adminCameraInputRef.current?.click();
+    } else if (cameraTarget === 'assoc-admin') {
+      assocAdminCameraInputRef.current?.click();
+    }
+  };
 
   // Handle Photo Selection with live preview
   const handlePhotoSelect = (file, setPhoto, setPreview) => {
@@ -678,17 +797,25 @@ export default function Register() {
                         <p className="text-[11px] text-gray-500 mb-2">
                           Upload portrait profile photo for your Main Administrator account (PNG, JPG, Max 5MB).
                         </p>
-                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
                           <button
                             type="button"
                             onClick={() => assocAdminPhotoInputRef.current?.click()}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-purple-50 text-purple-800 border border-purple-200 text-xs font-semibold rounded-xl transition shadow-xs"
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-purple-50 text-purple-800 border border-purple-200 text-xs font-semibold rounded-xl transition shadow-xs"
                           >
                             <HiPhoto className="w-4 h-4 text-purple-600" />
-                            <span>
-                              {assocAdminPhotoPreview ? 'Change Profile Photo' : 'Choose from Files / Update Photo'}
-                            </span>
+                            <span>Choose from Files</span>
                           </button>
+
+                          <button
+                            type="button"
+                            onClick={() => openCameraModal('assoc-admin')}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-purple-600 hover:bg-purple-700 text-white text-xs font-semibold rounded-xl transition shadow-xs"
+                          >
+                            <HiCamera className="w-4 h-4" />
+                            <span>Click Photo</span>
+                          </button>
+
                           {assocAdminPhotoPreview && (
                             <button
                               type="button"
@@ -696,16 +823,32 @@ export default function Register() {
                                 setAssocAdminProfilePhoto(null);
                                 setAssocAdminPhotoPreview(null);
                                 if (assocAdminPhotoInputRef.current) assocAdminPhotoInputRef.current.value = '';
+                                if (assocAdminCameraInputRef.current) assocAdminCameraInputRef.current.value = '';
                               }}
                               className="text-xs text-rose-600 hover:text-rose-700 font-semibold px-2 py-1"
                             >
                               Remove Photo
                             </button>
                           )}
+
                           <input
                             ref={assocAdminPhotoInputRef}
                             type="file"
                             accept="image/png,image/jpeg,image/jpg,image/webp"
+                            onChange={(e) =>
+                              handlePhotoSelect(
+                                e.target.files?.[0],
+                                setAssocAdminProfilePhoto,
+                                setAssocAdminPhotoPreview
+                              )
+                            }
+                            className="hidden"
+                          />
+                          <input
+                            ref={assocAdminCameraInputRef}
+                            type="file"
+                            accept="image/*"
+                            capture="user"
                             onChange={(e) =>
                               handlePhotoSelect(
                                 e.target.files?.[0],
@@ -996,17 +1139,6 @@ export default function Register() {
                           </option>
                         ))}
                       </select>
-                      <p className="text-[11px] text-gray-500 mt-1">
-                        Don't see your association? Switch to the{' '}
-                        <button
-                          type="button"
-                          onClick={() => handleTabChange('assoc-admin')}
-                          className="font-bold text-purple-700 hover:underline"
-                        >
-                          Admin + Association Registration Form
-                        </button>{' '}
-                        to create it.
-                      </p>
                     </div>
                   </div>
 
@@ -1037,17 +1169,25 @@ export default function Register() {
                         <p className="text-[11px] text-gray-500 mb-2">
                           Upload portrait profile photo for your administrator account (PNG, JPG, Max 5MB).
                         </p>
-                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
                           <button
                             type="button"
                             onClick={() => adminPhotoInputRef.current?.click()}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-blue-50 text-blue-800 border border-blue-200 text-xs font-semibold rounded-xl transition shadow-xs"
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-blue-50 text-blue-800 border border-blue-200 text-xs font-semibold rounded-xl transition shadow-xs"
                           >
                             <HiPhoto className="w-4 h-4 text-blue-600" />
-                            <span>
-                              {adminPhotoPreview ? 'Change Profile Photo' : 'Choose from Files / Update Photo'}
-                            </span>
+                            <span>Choose from Files</span>
                           </button>
+
+                          <button
+                            type="button"
+                            onClick={() => openCameraModal('admin')}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-semibold rounded-xl transition shadow-xs"
+                          >
+                            <HiCamera className="w-4 h-4" />
+                            <span>Click Photo</span>
+                          </button>
+
                           {adminPhotoPreview && (
                             <button
                               type="button"
@@ -1055,16 +1195,32 @@ export default function Register() {
                                 setAdminProfilePhoto(null);
                                 setAdminPhotoPreview(null);
                                 if (adminPhotoInputRef.current) adminPhotoInputRef.current.value = '';
+                                if (adminCameraInputRef.current) adminCameraInputRef.current.value = '';
                               }}
                               className="text-xs text-rose-600 hover:text-rose-700 font-semibold px-2 py-1"
                             >
                               Remove Photo
                             </button>
                           )}
+
                           <input
                             ref={adminPhotoInputRef}
                             type="file"
                             accept="image/png,image/jpeg,image/jpg,image/webp"
+                            onChange={(e) =>
+                              handlePhotoSelect(
+                                e.target.files?.[0],
+                                setAdminProfilePhoto,
+                                setAdminPhotoPreview
+                              )
+                            }
+                            className="hidden"
+                          />
+                          <input
+                            ref={adminCameraInputRef}
+                            type="file"
+                            accept="image/*"
+                            capture="user"
                             onChange={(e) =>
                               handlePhotoSelect(
                                 e.target.files?.[0],
@@ -1364,17 +1520,25 @@ export default function Register() {
                         <p className="text-[11px] text-gray-500 mb-2">
                           Upload portrait profile photo for your resident member account (PNG, JPG, Max 5MB).
                         </p>
-                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5">
                           <button
                             type="button"
                             onClick={() => memberPhotoInputRef.current?.click()}
-                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold rounded-xl transition shadow-xs"
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-300 text-xs font-semibold rounded-xl transition shadow-xs"
                           >
                             <HiPhoto className="w-4 h-4 text-emerald-600" />
-                            <span>
-                              {memberPhotoPreview ? 'Change Profile Photo' : 'Choose from Files / Update Photo'}
-                            </span>
+                            <span>Choose from Files</span>
                           </button>
+
+                          <button
+                            type="button"
+                            onClick={() => openCameraModal('member')}
+                            className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold rounded-xl transition shadow-xs"
+                          >
+                            <HiCamera className="w-4 h-4" />
+                            <span>Click Photo</span>
+                          </button>
+
                           {memberPhotoPreview && (
                             <button
                               type="button"
@@ -1382,16 +1546,32 @@ export default function Register() {
                                 setMemberProfilePhoto(null);
                                 setMemberPhotoPreview(null);
                                 if (memberPhotoInputRef.current) memberPhotoInputRef.current.value = '';
+                                if (memberCameraInputRef.current) memberCameraInputRef.current.value = '';
                               }}
                               className="text-xs text-rose-600 hover:text-rose-700 font-semibold px-2 py-1"
                             >
                               Remove Photo
                             </button>
                           )}
+
                           <input
                             ref={memberPhotoInputRef}
                             type="file"
                             accept="image/png,image/jpeg,image/jpg,image/webp"
+                            onChange={(e) =>
+                              handlePhotoSelect(
+                                e.target.files?.[0],
+                                setMemberProfilePhoto,
+                                setMemberPhotoPreview
+                              )
+                            }
+                            className="hidden"
+                          />
+                          <input
+                            ref={memberCameraInputRef}
+                            type="file"
+                            accept="image/*"
+                            capture="user"
                             onChange={(e) =>
                               handlePhotoSelect(
                                 e.target.files?.[0],
@@ -1692,6 +1872,97 @@ export default function Register() {
           rights reserved.
         </p>
       </footer>
+
+      {/* CAMERA SNAPSHOT MODAL */}
+      <Modal
+        isOpen={cameraModalOpen}
+        onClose={closeCameraModal}
+        title="📸 Click Profile Photo"
+        size="md"
+      >
+        <div className="space-y-4 text-center">
+          {cameraError ? (
+            <div className="p-6 bg-amber-50 rounded-2xl border border-amber-200 text-amber-800 space-y-3">
+              <HiCamera className="w-10 h-10 mx-auto text-amber-600" />
+              <p className="text-xs font-semibold">{cameraError}</p>
+              <button
+                type="button"
+                onClick={triggerNativeCamera}
+                className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition shadow-xs"
+              >
+                Use Device Camera / File Picker
+              </button>
+            </div>
+          ) : capturedPreview ? (
+            <div className="space-y-3">
+              <div className="w-64 h-64 mx-auto rounded-3xl overflow-hidden ring-4 ring-primary-500 shadow-md">
+                <img
+                  src={capturedPreview}
+                  alt="Captured portrait"
+                  className="w-full h-full object-cover"
+                />
+              </div>
+              <p className="text-xs font-semibold text-gray-700">
+                Photo captured! Do you want to use this portrait photo?
+              </p>
+              <div className="flex items-center justify-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setCapturedBlob(null);
+                    setCapturedPreview(null);
+                  }}
+                  className="px-4 py-2 border border-gray-300 bg-white hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold transition"
+                >
+                  🔄 Retake
+                </button>
+                <button
+                  type="button"
+                  onClick={handleConfirmCapturedPhoto}
+                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-md"
+                >
+                  ✓ Use This Photo
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              <div className="relative w-64 h-64 mx-auto rounded-3xl overflow-hidden bg-black ring-4 ring-gray-200 shadow-inner flex items-center justify-center">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  playsInline
+                  muted
+                  className="w-full h-full object-cover transform -scale-x-100"
+                />
+                <div className="absolute inset-0 border-2 border-white/40 rounded-3xl pointer-events-none flex items-center justify-center">
+                  <div className="w-48 h-48 border border-dashed border-white/60 rounded-full" />
+                </div>
+              </div>
+              <p className="text-xs text-gray-500">
+                Center your face in the circular guide and click <strong>Capture Photo</strong>.
+              </p>
+              <div className="flex items-center justify-center gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={triggerNativeCamera}
+                  className="px-3.5 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition"
+                >
+                  Use Device Camera App
+                </button>
+                <button
+                  type="button"
+                  onClick={handleCaptureSnapshot}
+                  className="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-xs font-bold transition shadow-md flex items-center gap-2"
+                >
+                  <HiCamera className="w-4 h-4" />
+                  <span>Capture Photo</span>
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      </Modal>
     </div>
   );
 }
