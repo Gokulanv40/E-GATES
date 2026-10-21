@@ -16,6 +16,7 @@ import toast from 'react-hot-toast';
 import api from '../../services/api';
 import DataTable from '../../components/common/DataTable';
 import Modal from '../../components/common/Modal';
+import DigitalIdCardModal from '../../components/common/DigitalIdCardModal';
 
 export default function AdminMembers() {
   const [members, setMembers] = useState([]);
@@ -176,10 +177,11 @@ export default function AdminMembers() {
             setSelectedMember(row);
             setIsDetailModalOpen(true);
           }}
-          className="inline-flex items-center gap-1 text-xs px-2.5 py-1 bg-primary-50 text-primary-700 hover:bg-primary-100 font-semibold rounded-lg transition"
+          className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 bg-teal-50 text-teal-800 border border-teal-200/80 hover:bg-teal-100 font-bold rounded-lg transition shadow-2xs"
+          title="View Official Digital ID Badge"
         >
-          <HiEye className="w-3.5 h-3.5" />
-          <span>Details</span>
+          <span>🪪</span>
+          <span>Digital ID</span>
         </button>
       ),
     },
@@ -253,125 +255,12 @@ export default function AdminMembers() {
         />
       </div>
 
-      {/* Modal: View Member Details */}
-      <Modal
+      {/* Digital ID Modal */}
+      <DigitalIdCardModal
         isOpen={isDetailModalOpen}
         onClose={() => setIsDetailModalOpen(false)}
-        title={`Resident Details: ${selectedMember?.name || ''}`}
-        size="md"
-      >
-        {selectedMember && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-4 bg-primary-50/60 p-4 rounded-xl border border-primary-100">
-              <div className="w-14 h-14 rounded-full bg-primary-600 text-white font-bold text-xl flex items-center justify-center flex-shrink-0 shadow-sm">
-                {selectedMember.name?.charAt(0).toUpperCase()}
-              </div>
-              <div>
-                <h3 className="text-base font-bold text-gray-900">{selectedMember.name}</h3>
-                <span className="font-mono text-xs font-bold text-primary-700 bg-white px-2 py-0.5 rounded border border-primary-200">
-                  Code: {selectedMember.member_code || 'PENDING'}
-                </span>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 text-xs bg-gray-50 p-4 rounded-xl border border-gray-200">
-              <div>
-                <span className="text-gray-500 block">Door / Plot No:</span>
-                <span className="font-bold text-gray-900 text-sm">{selectedMember.door_no || '—'}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 block">Street / Cross:</span>
-                <span className="font-semibold text-gray-800">{selectedMember.street || '—'}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 block">Layout / Colony:</span>
-                <span className="font-semibold text-gray-800">{selectedMember.layout_name || '—'}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 block">Taluk:</span>
-                <span className="font-medium text-gray-800">{selectedMember.taluk || '—'}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 block">District & State:</span>
-                <span className="font-medium text-gray-800">
-                  {selectedMember.district || '—'}
-                  {selectedMember.state ? `, ${selectedMember.state}` : ''}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-500 block">Phone:</span>
-                <span className="font-medium text-gray-800">{selectedMember.phone || '—'}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 block">Email:</span>
-                <span className="font-medium text-gray-800">{selectedMember.email || '—'}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 block">Registration Date:</span>
-                <span className="font-medium text-gray-800">
-                  {selectedMember.created_at ? format(new Date(selectedMember.created_at), 'dd MMM yyyy') : '—'}
-                </span>
-              </div>
-            </div>
-
-            {/* Document Links */}
-            <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-gray-700 block mb-2">
-                Verification Proofs
-              </span>
-              <div className="grid grid-cols-2 gap-3">
-                {selectedMember.eb_bill_proof ? (
-                  <a
-                    href={resolveFileUrl(selectedMember.eb_bill_proof)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between p-2.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-xs font-medium text-primary-600 transition"
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <HiDocumentText className="w-4 h-4 text-sky-500" />
-                      EB Bill Proof
-                    </span>
-                    <HiArrowTopRightOnSquare className="w-3.5 h-3.5" />
-                  </a>
-                ) : (
-                  <div className="p-2.5 rounded-lg border border-dashed border-gray-200 text-xs text-gray-400 text-center">
-                    No EB bill uploaded
-                  </div>
-                )}
-
-                {selectedMember.property_tax_receipt ? (
-                  <a
-                    href={resolveFileUrl(selectedMember.property_tax_receipt)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between p-2.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-xs font-medium text-primary-600 transition"
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <HiDocumentText className="w-4 h-4 text-emerald-500" />
-                      Property Tax Proof
-                    </span>
-                    <HiArrowTopRightOnSquare className="w-3.5 h-3.5" />
-                  </a>
-                ) : (
-                  <div className="p-2.5 rounded-lg border border-dashed border-gray-200 text-xs text-gray-400 text-center">
-                    No Tax receipt uploaded
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-3 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => setIsDetailModalOpen(false)}
-                className="px-4 py-2 text-sm font-medium text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
+        user={selectedMember}
+      />
     </div>
   );
 }

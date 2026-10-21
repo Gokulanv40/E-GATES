@@ -14,6 +14,7 @@ import {
 import api from '../../services/api';
 import Modal from '../../components/common/Modal';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import DigitalIdCardModal from '../../components/common/DigitalIdCardModal';
 import { useLanguage } from '../../context/LanguageContext';
 import toast from 'react-hot-toast';
 
@@ -23,6 +24,10 @@ export default function ManageUsers() {
   const [users, setUsers] = useState([]);
   const [associations, setAssociations] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // Digital ID Modal
+  const [selectedUserForId, setSelectedUserForId] = useState(null);
+  const [isIdModalOpen, setIsIdModalOpen] = useState(false);
 
   // Filters
   const [selectedAssocId, setSelectedAssocId] = useState('all');
@@ -319,12 +324,26 @@ export default function ManageUsers() {
                     key={user.id}
                     className="hover:bg-purple-50/40 dark:hover:bg-slate-800/40 transition group"
                   >
-                    <td className="py-3.5 px-4 font-mono font-bold text-gray-900 dark:text-gray-100">
+                    <td
+                      className="py-3.5 px-4 font-mono font-bold text-gray-900 dark:text-gray-100 cursor-pointer hover:text-purple-600 transition"
+                      onClick={() => {
+                        setSelectedUserForId(user);
+                        setIsIdModalOpen(true);
+                      }}
+                      title="Click to view Digital ID"
+                    >
                       {user.member_code ? `#${user.member_code}` : '------'}
                     </td>
-                    <td className="py-3.5 px-4 font-bold text-gray-900 dark:text-white">
+                    <td
+                      className="py-3.5 px-4 font-bold text-gray-900 dark:text-white cursor-pointer"
+                      onClick={() => {
+                        setSelectedUserForId(user);
+                        setIsIdModalOpen(true);
+                      }}
+                      title="Click to view Digital ID"
+                    >
                       <div className="flex items-center gap-2.5">
-                        <div className="w-8 h-8 rounded-full overflow-hidden bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 flex items-center justify-center font-bold text-xs ring-1 ring-purple-200 dark:ring-purple-800 flex-shrink-0">
+                        <div className="w-8 h-8 rounded-full overflow-hidden bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 flex items-center justify-center font-bold text-xs ring-1 ring-purple-200 dark:ring-purple-800 flex-shrink-0 group-hover:ring-2 group-hover:ring-teal-400 transition">
                           {user.profile_photo ? (
                             <img
                               src={resolveFileUrl(user.profile_photo)}
@@ -337,7 +356,10 @@ export default function ManageUsers() {
                           )}
                         </div>
                         <div>
-                          <p>{user.name}</p>
+                          <p className="group-hover:text-purple-600 dark:group-hover:text-purple-400 transition flex items-center gap-1">
+                            <span>{user.name}</span>
+                            <span className="text-[10px] text-teal-600 opacity-0 group-hover:opacity-100 transition">🪪</span>
+                          </p>
                           <p className="text-[10px] text-gray-400 font-normal">{user.email}</p>
                         </div>
                       </div>
@@ -395,6 +417,20 @@ export default function ManageUsers() {
                     </td>
                     <td className="py-3.5 px-4 text-right">
                       <div className="flex items-center justify-end gap-1.5">
+                        {/* Digital ID Button */}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setSelectedUserForId(user);
+                            setIsIdModalOpen(true);
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-bold bg-teal-50 dark:bg-teal-950/40 text-teal-700 dark:text-teal-300 border border-teal-200 dark:border-teal-800 hover:bg-teal-100 transition shadow-2xs"
+                          title="View Official Digital ID Badge"
+                        >
+                          <span>🪪</span>
+                          <span>Digital ID</span>
+                        </button>
+
                         {/* Edit option for Super Admin only */}
                         {user.role === 'super_admin' && (
                           <button
@@ -621,6 +657,14 @@ export default function ManageUsers() {
         message={`Are you sure you want to permanently delete user "${deleteUser?.name}" (${deleteUser?.email || deleteUser?.phone})?`}
         confirmText={isDeleting ? 'Deleting...' : 'Delete Permanently'}
         variant="danger"
+      />
+
+      {/* DIGITAL ID CARD MODAL */}
+      <DigitalIdCardModal
+        isOpen={isIdModalOpen}
+        onClose={() => setIsIdModalOpen(false)}
+        user={selectedUserForId}
+        associationName={selectedUserForId?.association_name}
       />
     </div>
   );

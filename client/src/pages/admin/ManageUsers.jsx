@@ -18,6 +18,7 @@ import {
 import api from '../../services/api';
 import Modal from '../../components/common/Modal';
 import ConfirmDialog from '../../components/common/ConfirmDialog';
+import DigitalIdCardModal from '../../components/common/DigitalIdCardModal';
 import { useAuth } from '../../hooks/useAuth';
 import toast from 'react-hot-toast';
 
@@ -517,10 +518,17 @@ export default function AdminManageUsers() {
                   return (
                     <tr key={u.id} className="hover:bg-gray-50/60 transition group">
                       {/* Name & Code */}
-                      <td className="py-3.5 px-4">
+                      <td
+                        className="py-3.5 px-4 cursor-pointer"
+                        onClick={() => {
+                          setSelectedUser(u);
+                          setIsDetailModalOpen(true);
+                        }}
+                        title="Click to view Digital ID Card"
+                      >
                         <div className="flex items-center gap-2.5">
                           <div
-                            className={`w-8 h-8 rounded-full overflow-hidden flex items-center justify-center font-bold text-xs text-white flex-shrink-0 ${
+                            className={`w-8 h-8 rounded-full overflow-hidden flex items-center justify-center font-bold text-xs text-white flex-shrink-0 group-hover:ring-2 group-hover:ring-teal-400 transition ${
                               isMainAdmin
                                 ? 'bg-purple-600'
                                 : isLayoutAdmin
@@ -540,8 +548,9 @@ export default function AdminManageUsers() {
                             )}
                           </div>
                           <div>
-                            <p className="font-bold text-gray-900 group-hover:text-primary-600 transition">
-                              {u.name}
+                            <p className="font-bold text-gray-900 group-hover:text-teal-700 transition flex items-center gap-1">
+                              <span>{u.name}</span>
+                              <span className="text-[10px] text-teal-600 opacity-0 group-hover:opacity-100 transition">🪪</span>
                             </p>
                             <span className="font-mono text-[10px] text-gray-500">
                               #{u.member_code || 'PENDING'}
@@ -608,11 +617,11 @@ export default function AdminManageUsers() {
                               setSelectedUser(u);
                               setIsDetailModalOpen(true);
                             }}
-                            className="inline-flex items-center gap-1 text-xs px-2.5 py-1 bg-gray-100 hover:bg-gray-200 text-gray-700 font-semibold rounded-lg transition"
-                            title="View Full Profile Details"
+                            className="inline-flex items-center gap-1.5 text-xs px-2.5 py-1 bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200/80 font-bold rounded-lg transition shadow-2xs"
+                            title="View Official Digital ID Badge"
                           >
-                            <HiEye className="w-3.5 h-3.5" />
-                            <span>Details</span>
+                            <span>🪪</span>
+                            <span>Digital ID</span>
                           </button>
 
                           {/* Change Role Button */}
@@ -944,175 +953,16 @@ export default function AdminManageUsers() {
       </Modal>
 
       {/* =========================================================================
-          MODAL 3: VIEW USER DETAILS
+          DIGITAL ID CARD MODAL
          ========================================================================= */}
-      <Modal
+      <DigitalIdCardModal
         isOpen={isDetailModalOpen}
         onClose={() => setIsDetailModalOpen(false)}
-        title={`User Profile: ${selectedUser?.name || ''}`}
-        size="md"
-      >
-        {selectedUser && (
-          <div className="space-y-4">
-            <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-xl border border-gray-200">
-              <div
-                className={`w-14 h-14 rounded-full overflow-hidden flex items-center justify-center font-bold text-xl text-white shadow-sm flex-shrink-0 ${
-                  selectedUser.is_main_admin
-                    ? 'bg-purple-600'
-                    : selectedUser.role === 'admin'
-                    ? 'bg-indigo-600'
-                    : 'bg-primary-600'
-                }`}
-              >
-                {selectedUser.profile_photo ? (
-                  <img
-                    src={resolveFileUrl(selectedUser.profile_photo)}
-                    alt={selectedUser.name}
-                    className="w-full h-full object-cover"
-                    onError={(e) => { e.target.style.display = 'none'; }}
-                  />
-                ) : (
-                  selectedUser.name?.charAt(0).toUpperCase()
-                )}
-              </div>
-              <div className="space-y-1">
-                <h3 className="text-base font-bold text-gray-900">{selectedUser.name}</h3>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-mono text-xs font-bold text-gray-700 bg-white px-2 py-0.5 rounded border border-gray-300">
-                    #{selectedUser.member_code || 'PENDING'}
-                  </span>
-                  <span
-                    className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                      selectedUser.is_main_admin
-                        ? 'bg-purple-100 text-purple-800 border border-purple-200'
-                        : selectedUser.role === 'admin'
-                        ? 'bg-indigo-100 text-indigo-800 border border-indigo-200'
-                        : 'bg-blue-100 text-blue-800 border border-blue-200'
-                    }`}
-                  >
-                    {selectedUser.is_main_admin
-                      ? 'Main Association Admin'
-                      : selectedUser.role === 'admin'
-                      ? 'Layout Admin'
-                      : 'Resident Member'}
-                  </span>
-                  {canManageRoles && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsDetailModalOpen(false);
-                        handleOpenRoleModal(selectedUser);
-                      }}
-                      className="ml-auto inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-purple-700 bg-purple-50 hover:bg-purple-100 border border-purple-200 rounded-lg transition"
-                      title="Change Role / Designation"
-                    >
-                      <HiShieldCheck className="w-3.5 h-3.5 text-purple-600" />
-                      <span>Change Role</span>
-                    </button>
-                  )}
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3 text-xs bg-gray-50 p-4 rounded-xl border border-gray-200">
-              <div>
-                <span className="text-gray-500 block">Door / Flat No:</span>
-                <span className="font-bold text-gray-900 text-sm">{selectedUser.door_no || '—'}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 block">Street:</span>
-                <span className="font-semibold text-gray-800">{selectedUser.street || '—'}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 block">Phone:</span>
-                <span className="font-medium text-gray-800">{selectedUser.phone || '—'}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 block">Email:</span>
-                <span className="font-medium text-gray-800">{selectedUser.email || '—'}</span>
-              </div>
-              <div>
-                <span className="text-gray-500 block">Account Status:</span>
-                <span
-                  className={`inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
-                    selectedUser.status === 'approved'
-                      ? 'bg-emerald-100 text-emerald-800'
-                      : selectedUser.status === 'pending'
-                      ? 'bg-amber-100 text-amber-800'
-                      : 'bg-rose-100 text-rose-800'
-                  }`}
-                >
-                  {selectedUser.status}
-                </span>
-              </div>
-              <div>
-                <span className="text-gray-500 block">Joined Date:</span>
-                <span className="font-medium text-gray-800">
-                  {selectedUser.created_at
-                    ? new Date(selectedUser.created_at).toLocaleDateString()
-                    : '—'}
-                </span>
-              </div>
-            </div>
-
-            {/* Verification Proofs */}
-            <div>
-              <span className="text-xs font-bold uppercase tracking-wider text-gray-700 block mb-2">
-                Verification Proofs
-              </span>
-              <div className="grid grid-cols-2 gap-3">
-                {selectedUser.eb_bill_proof ? (
-                  <a
-                    href={resolveFileUrl(selectedUser.eb_bill_proof)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between p-2.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-xs font-medium text-primary-600 transition"
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <HiDocumentText className="w-4 h-4 text-sky-500" />
-                      EB Bill Proof
-                    </span>
-                    <HiArrowTopRightOnSquare className="w-3.5 h-3.5" />
-                  </a>
-                ) : (
-                  <div className="p-2.5 rounded-lg border border-dashed border-gray-200 text-xs text-gray-400 text-center">
-                    No EB bill uploaded
-                  </div>
-                )}
-
-                {selectedUser.property_tax_receipt ? (
-                  <a
-                    href={resolveFileUrl(selectedUser.property_tax_receipt)}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-center justify-between p-2.5 rounded-lg border border-gray-200 bg-white hover:bg-gray-50 text-xs font-medium text-primary-600 transition"
-                  >
-                    <span className="flex items-center gap-1.5">
-                      <HiDocumentText className="w-4 h-4 text-emerald-500" />
-                      Property Tax Proof
-                    </span>
-                    <HiArrowTopRightOnSquare className="w-3.5 h-3.5" />
-                  </a>
-                ) : (
-                  <div className="p-2.5 rounded-lg border border-dashed border-gray-200 text-xs text-gray-400 text-center">
-                    No Tax receipt uploaded
-                  </div>
-                )}
-              </div>
-            </div>
-
-            <div className="flex justify-end pt-3 border-t border-gray-100">
-              <button
-                type="button"
-                onClick={() => setIsDetailModalOpen(false)}
-                className="px-4 py-2 text-xs font-semibold text-gray-700 bg-gray-100 rounded-xl hover:bg-gray-200 transition"
-              >
-                Close
-              </button>
-            </div>
-          </div>
-        )}
-      </Modal>
+        user={selectedUser}
+        associationName={currentUser?.association_name}
+        canManageRoles={canManageRoles}
+        onChangeRole={handleOpenRoleModal}
+      />
 
       {/* =========================================================================
           MODAL: CHANGE USER ROLES & LEADERSHIP DESIGNATION (WITH USER SEARCH BAR)
