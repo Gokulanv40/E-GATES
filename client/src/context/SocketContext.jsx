@@ -4,7 +4,19 @@ import { useAuth } from '../hooks/useAuth';
 
 export const SocketContext = createContext(null);
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5002';
+const getSocketUrl = () => {
+  if (
+    typeof window !== 'undefined' &&
+    window.location?.hostname &&
+    window.location.hostname !== 'localhost' &&
+    window.location.hostname !== '127.0.0.1'
+  ) {
+    return `http://${window.location.hostname}:5002`;
+  }
+  return import.meta.env.VITE_SOCKET_URL || 'http://localhost:5002';
+};
+
+const SOCKET_URL = getSocketUrl();
 
 export const SocketProvider = ({ children }) => {
   const { token, isAuthenticated, user } = useAuth();

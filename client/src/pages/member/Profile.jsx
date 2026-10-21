@@ -820,59 +820,6 @@ export default function Profile() {
         </div>
       </div>
 
-      {/* Super Admin: Platform Organization & Provider Card */}
-      {isSuperAdmin && (
-        <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-purple-100 shadow-sm space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-gray-100">
-            <div className="flex items-center gap-2">
-              <HiBuildingOffice2 className="w-5 h-5 text-purple-600" />
-              <h2 className="text-sm sm:text-base font-bold text-gray-900">
-                Platform Organization & Software Provider
-              </h2>
-            </div>
-            <span className="text-[11px] font-bold px-3 py-1 bg-purple-100 text-purple-800 rounded-full border border-purple-200 uppercase tracking-wide">
-              👑 Master Platform Level
-            </span>
-          </div>
-
-          <div className="flex flex-col md:flex-row items-center gap-6 p-4 sm:p-6 rounded-2xl bg-gradient-to-r from-purple-50/70 via-indigo-50/40 to-blue-50/40 border border-purple-100">
-            {/* Jishnu Infotech Banner Logo */}
-            <div className="w-full md:w-80 max-w-sm bg-white rounded-2xl p-4 border border-purple-100 flex items-center justify-center shadow-sm flex-shrink-0">
-              <img
-                src="/images/jishnu-banner-logo.png"
-                alt="Jishnu Infotech"
-                className="max-h-24 w-auto object-contain"
-                onError={(e) => {
-                  e.target.src = '/images/jishnu-logo.png';
-                }}
-              />
-            </div>
-
-            <div className="flex-1 space-y-2 text-center md:text-left">
-              <div>
-                <h3 className="text-lg sm:text-xl font-black text-gray-900 tracking-tight">
-                  Jishnu Infotech
-                </h3>
-                <p className="text-xs sm:text-sm font-bold text-indigo-700 tracking-wide">
-                  Innovate • Integrate • Inspire
-                </p>
-              </div>
-              <p className="text-xs text-gray-600 leading-relaxed">
-                Centralized Enterprise Multi-Tenant Association Management Cloud Platform. Platform administrators manage association onboarding & approvals, platform administrators, cross-association community events, global voting broadcasts, and system-wide audit monitoring.
-              </p>
-              <div className="flex flex-wrap items-center justify-center md:justify-start gap-2 pt-1 text-[11px] font-semibold text-gray-500">
-                <span className="px-2.5 py-0.5 rounded-full bg-white border border-gray-200">
-                  🌐 Platform Scope: Multi-Tenant Architecture
-                </span>
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-                  ✓ System Status: Fully Operational
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Registered Association Details Card (with Edit Association Option for Admins) */}
       {!isSuperAdmin && (profileData.association_id || profileData.association_name || assocDetails) && (
         <div className="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 border border-gray-100 shadow-sm space-y-3">
@@ -940,7 +887,7 @@ export default function Profile() {
       )}
 
       {/* Grid: Personal Details & Layout Residence Address */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
+      <div className={`grid grid-cols-1 ${isSuperAdmin ? '' : 'md:grid-cols-2'} gap-4 sm:gap-6`}>
         {/* Section 1: Personal & Contact Information */}
         <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-100 shadow-sm space-y-4">
           <div className="flex items-center justify-between pb-2 border-b border-gray-100">
@@ -948,9 +895,11 @@ export default function Profile() {
               <HiEnvelope className="w-5 h-5 text-primary-600" />
               Personal & Contact Information
             </h2>
-            <span className="text-[10px] sm:text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
-              Step 2 of Reg
-            </span>
+            {!isSuperAdmin && (
+              <span className="text-[10px] sm:text-[11px] font-semibold text-gray-400 uppercase tracking-wider">
+                Step 2 of Reg
+              </span>
+            )}
           </div>
 
           <div className="space-y-3 text-xs">
@@ -995,62 +944,8 @@ export default function Profile() {
           </div>
         </div>
 
-        {/* Section 2: Layout Residence Address or Super Admin Platform Authority */}
-        {isSuperAdmin ? (
-          <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-100 shadow-sm space-y-4">
-            <div className="flex items-center justify-between pb-2 border-b border-gray-100">
-              <h2 className="text-sm sm:text-base font-bold text-gray-900 flex items-center gap-2">
-                <HiShieldCheck className="w-5 h-5 text-purple-600" />
-                Platform Privileges & Authority
-              </h2>
-              <span className="text-[10px] sm:text-[11px] font-semibold text-purple-700 bg-purple-50 px-2.5 py-0.5 rounded-full border border-purple-200 uppercase tracking-wider">
-                Full Root Authority
-              </span>
-            </div>
-
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 text-xs">
-              <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-100">
-                <span className="text-purple-600 block font-semibold uppercase text-[10px]">
-                  Multi-Tenant Scope
-                </span>
-                <span className="text-sm font-bold text-gray-900">All Registered Associations</span>
-              </div>
-
-              <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-100">
-                <span className="text-purple-600 block font-semibold uppercase text-[10px]">
-                  Association Management
-                </span>
-                <span className="text-sm font-bold text-gray-900">Create, Approve & Manage</span>
-              </div>
-
-              <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-100 sm:col-span-2">
-                <span className="text-purple-600 block font-semibold uppercase text-[10px]">
-                  User Directory Authority
-                </span>
-                <span className="text-sm font-bold text-gray-900">Global Cross-Association Access & Approval</span>
-              </div>
-
-              <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-100">
-                <span className="text-purple-600 block font-semibold uppercase text-[10px]">Broadcast & SOS</span>
-                <span className="text-sm font-bold text-gray-900">Platform-Wide Alerts & Events</span>
-              </div>
-
-              <div className="p-3 bg-purple-50/60 rounded-xl border border-purple-100">
-                <span className="text-purple-600 block font-semibold uppercase text-[10px]">
-                  Technology Partner
-                </span>
-                <span className="text-sm font-bold text-gray-900">Jishnu Infotech Platform Engine</span>
-              </div>
-            </div>
-
-            <div className="p-3.5 bg-gradient-to-r from-purple-50 via-indigo-50 to-blue-50 rounded-xl border border-purple-200/60 flex items-start gap-2.5">
-              <HiShieldCheck className="w-5 h-5 text-purple-600 flex-shrink-0 mt-0.5" />
-              <div className="text-xs text-purple-950 font-medium leading-relaxed">
-                As Super Admin, your account has root administrative authority over the entire multi-tenant residential association platform. Residential plot documents and layout addresses are not required.
-              </div>
-            </div>
-          </div>
-        ) : (
+        {/* Section 2: Layout Residence Address - Excluded for Super Admin */}
+        {!isSuperAdmin && (
           <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-100 shadow-sm space-y-4">
             <div className="flex items-center justify-between pb-2 border-b border-gray-100">
               <h2 className="text-sm sm:text-base font-bold text-gray-900 flex items-center gap-2">
@@ -1390,8 +1285,9 @@ export default function Profile() {
       </div>
       )}
 
-      {/* Section 4: Family Members & Household Directory */}
-      <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-100 shadow-sm space-y-4">
+      {/* Section 4: Family Members & Household Directory - Excluded for Super Admin */}
+      {!isSuperAdmin && (
+        <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-100 shadow-sm space-y-4">
         {/* Header */}
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-gray-100">
           <div className="flex items-center gap-2.5">
@@ -1621,6 +1517,7 @@ export default function Profile() {
           </div>
         )}
       </div>
+      )}
 
       {/* Modal: Edit Registration & Profile Details (MATCHING REGISTRATION LAYOUT) */}
       <Modal
@@ -1777,7 +1674,10 @@ export default function Profile() {
             </div>
           </div>
 
-          {/* 3. LAYOUT RESIDENCE ADDRESS */}
+          {/* 3. LAYOUT RESIDENCE ADDRESS & 4. ADDRESS PROOF DOCUMENTS - Excluded for Super Admin */}
+          {!isSuperAdmin && (
+            <>
+              {/* 3. LAYOUT RESIDENCE ADDRESS */}
           <div className="space-y-3 pt-1">
             <h3 className="text-sm font-bold text-blue-600 flex items-center gap-2">
               <HiHome className="w-5 h-5 text-blue-600" />
@@ -2031,6 +1931,8 @@ export default function Profile() {
               </div>
             </div>
           </div>
+          </>
+          )}
 
           {/* 5. SECURITY PASSWORD */}
           <div className="space-y-3 pt-1">
