@@ -18,6 +18,10 @@ import {
   HiWrenchScrewdriver,
   HiScale,
   HiMapPin,
+  HiIdentification,
+  HiShieldCheck,
+  HiUser,
+  HiGlobeAlt,
 } from 'react-icons/hi2';
 import {
   BarChart,
@@ -79,7 +83,7 @@ export default function AdminVotingManage() {
 
   // Create Poll Form
   const [pollForm, setPollForm] = useState({
-    poll_type: 'vendor_selection', // 'vendor_selection' | 'resolution_passing'
+    poll_type: 'vendor_selection', // 'vendor_selection' | 'resolution_passing' | 'election'
     service_category: 'Plumber',
     resolution_task_type: 'Infrastructure & Road Tarring',
     title: '',
@@ -94,7 +98,111 @@ export default function AdminVotingManage() {
     vendors: [
       { name: '', company: '', contact: '', quotation: '', notes: '' },
     ],
+    // For election polling
+    election_type: 'all_roles', // 'all_roles' | 'single_role'
+    internal_officer_id: '',
+    internal_officer_name: '',
+    internal_officer_contact: '',
+    external_officer_name: '',
+    external_officer_contact: '',
+    external_officer_org: '',
+    election_roles_builder: [
+      {
+        role_name: 'President',
+        candidates: [
+          { name: '', contact: '', notes: '' },
+          { name: '', contact: '', notes: '' },
+        ],
+      },
+    ],
   });
+
+  // Election roles builder handlers
+  const handleAddElectionRole = () => {
+    setPollForm((prev) => ({
+      ...prev,
+      election_roles_builder: [
+        ...prev.election_roles_builder,
+        {
+          role_name: '',
+          candidates: [
+            { name: '', contact: '', notes: '' },
+            { name: '', contact: '', notes: '' },
+          ],
+        },
+      ],
+    }));
+  };
+
+  const handleRemoveElectionRole = (rIdx) => {
+    if (pollForm.election_roles_builder.length <= 1) return;
+    setPollForm((prev) => ({
+      ...prev,
+      election_roles_builder: prev.election_roles_builder.filter((_, idx) => idx !== rIdx),
+    }));
+  };
+
+  const handleRoleNameChange = (rIdx, value) => {
+    setPollForm((prev) => {
+      const next = [...prev.election_roles_builder];
+      next[rIdx] = { ...next[rIdx], role_name: value };
+      return { ...prev, election_roles_builder: next };
+    });
+  };
+
+  const handleAddCandidateToRole = (rIdx) => {
+    setPollForm((prev) => {
+      const next = [...prev.election_roles_builder];
+      next[rIdx] = {
+        ...next[rIdx],
+        candidates: [...next[rIdx].candidates, { name: '', contact: '', notes: '' }],
+      };
+      return { ...prev, election_roles_builder: next };
+    });
+  };
+
+  const handleRemoveCandidateFromRole = (rIdx, cIdx) => {
+    setPollForm((prev) => {
+      const next = [...prev.election_roles_builder];
+      if (next[rIdx].candidates.length <= 1) return prev;
+      next[rIdx] = {
+        ...next[rIdx],
+        candidates: next[rIdx].candidates.filter((_, idx) => idx !== cIdx),
+      };
+      return { ...prev, election_roles_builder: next };
+    });
+  };
+
+  const handleCandidateFieldChange = (rIdx, cIdx, field, value) => {
+    setPollForm((prev) => {
+      const next = [...prev.election_roles_builder];
+      const nextCands = [...next[rIdx].candidates];
+      nextCands[cIdx] = { ...nextCands[cIdx], [field]: value };
+      next[rIdx] = { ...next[rIdx], candidates: nextCands };
+      return { ...prev, election_roles_builder: next };
+    });
+  };
+
+  const handleInternalOfficerSelect = (userId) => {
+    const member = associationMembers.find((m) => String(m.id) === String(userId));
+    if (member) {
+      setPollForm((prev) => ({
+        ...prev,
+        internal_officer_id: member.id,
+        internal_officer_name: member.name,
+        internal_officer_contact: member.door_number
+          ? `Door ${member.door_number}${member.phone ? `, Tel: ${member.phone}` : ''}`
+          : member.phone || member.email || '',
+      }));
+    } else {
+      setPollForm((prev) => ({
+        ...prev,
+        internal_officer_id: '',
+        internal_officer_name: '',
+        internal_officer_contact: '',
+      }));
+    }
+  };
 
   // Add Single Vendor Form (for adding more to an existing active poll)
   const [vendorForm, setVendorForm] = useState({
@@ -236,6 +344,29 @@ export default function AdminVotingManage() {
       }
     }
 
+    if (pollForm.poll_type === 'election') {
+      if (!pollForm.internal_officer_name.trim()) {
+        toast.error('Please select an Internal Polling Officer from approved association members');
+        return;
+      }
+      if (!pollForm.external_officer_name.trim()) {
+        toast.error('Please specify the External Polling Officer name');
+        return;
+      }
+      const validRoles = pollForm.election_roles_builder.filter((r) => r.role_name.trim());
+      if (validRoles.length === 0) {
+        toast.error('Please provide at least one role/designation for the election');
+        return;
+      }
+      for (const r of validRoles) {
+        const cands = (r.candidates || []).filter((c) => c.name.trim());
+        if (cands.length < 1) {
+          toast.error(`Please add at least 1 candidate for role "${r.role_name}"`);
+          return;
+        }
+      }
+    }
+
     if (pollForm.target_audience === 'street' && !pollForm.target_street.trim()) {
       toast.error('Please specify the target street/block name');
       return;
@@ -248,6 +379,28 @@ export default function AdminVotingManage() {
 
     try {
       setSubmitting(true);
+      const candidatesPayload = [];
+      const rolesPayload = [];
+      if (pollForm.poll_type === 'election') {
+        pollForm.election_roles_builder.forEach((r) => {
+          const rName = r.role_name.trim();
+          if (rName) {
+            rolesPayload.push(rName);
+            (r.candidates || []).forEach((c) => {
+              if (c.name.trim()) {
+                candidatesPayload.push({
+                  name: c.name.trim(),
+                  company: rName,
+                  contesting_role: rName,
+                  contact: c.contact.trim(),
+                  notes: c.notes.trim(),
+                });
+              }
+            });
+          }
+        });
+      }
+
       const payload = {
         title: pollForm.title.trim(),
         description: pollForm.description.trim(),
@@ -261,11 +414,21 @@ export default function AdminVotingManage() {
         target_street: pollForm.target_audience === 'street' ? pollForm.target_street.trim() : null,
         target_user_ids: pollForm.target_audience === 'selected' ? pollForm.target_user_ids : [],
         vendors: pollForm.poll_type === 'vendor_selection' ? pollForm.vendors.filter((v) => v.name.trim()) : [],
+        // Election payload
+        election_type: pollForm.poll_type === 'election' ? pollForm.election_type : null,
+        internal_officer_name: pollForm.poll_type === 'election' ? pollForm.internal_officer_name.trim() : null,
+        internal_officer_contact: pollForm.poll_type === 'election' ? pollForm.internal_officer_contact.trim() : null,
+        external_officer_name: pollForm.poll_type === 'election' ? pollForm.external_officer_name.trim() : null,
+        external_officer_contact: pollForm.poll_type === 'election' ? `${pollForm.external_officer_contact.trim()}${pollForm.external_officer_org ? ` (${pollForm.external_officer_org.trim()})` : ''}` : null,
+        election_roles: rolesPayload,
+        candidates: candidatesPayload,
       };
 
       const res = await api.post('/voting/polls', payload);
       toast.success(
-        pollForm.poll_type === 'resolution_passing'
+        pollForm.poll_type === 'election'
+          ? 'Association Election poll created successfully with polling officers!'
+          : pollForm.poll_type === 'resolution_passing'
           ? 'Resolution poll created with automatic Yes/No options!'
           : 'Service vendor poll created successfully!'
       );
@@ -285,6 +448,22 @@ export default function AdminVotingManage() {
         target_street: '',
         target_user_ids: [],
         vendors: [{ name: '', company: '', contact: '', quotation: '', notes: '' }],
+        election_type: 'all_roles',
+        internal_officer_id: '',
+        internal_officer_name: '',
+        internal_officer_contact: '',
+        external_officer_name: '',
+        external_officer_contact: '',
+        external_officer_org: '',
+        election_roles_builder: [
+          {
+            role_name: 'President',
+            candidates: [
+              { name: '', contact: '', notes: '' },
+              { name: '', contact: '', notes: '' },
+            ],
+          },
+        ],
       });
 
       const newPoll = res.data?.data || res.data;
@@ -506,12 +685,18 @@ export default function AdminVotingManage() {
                     <div className="flex items-center justify-between gap-2 mb-1">
                       <span
                         className={`text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                          poll.poll_type === 'resolution_passing'
+                          poll.poll_type === 'election'
+                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                            : poll.poll_type === 'resolution_passing'
                             ? 'bg-purple-100 text-purple-800'
                             : 'bg-blue-100 text-blue-800'
                         }`}
                       >
-                        {poll.poll_type === 'resolution_passing' ? 'Resolution' : 'Vendor Select'}
+                        {poll.poll_type === 'election'
+                          ? `🗳️ Election (${poll.election_type === 'single_role' ? 'Single Role' : 'All Roles'})`
+                          : poll.poll_type === 'resolution_passing'
+                          ? 'Resolution'
+                          : 'Vendor Select'}
                       </span>
 
                       <span
@@ -527,6 +712,11 @@ export default function AdminVotingManage() {
 
                     <h3 className="text-sm font-bold text-gray-900 line-clamp-1">{poll.title}</h3>
 
+                    {poll.poll_type === 'election' && (
+                      <p className="text-[11px] font-medium text-amber-700">
+                        {poll.internal_officer_name ? `Officers: ${poll.internal_officer_name} & ${poll.external_officer_name || 'External'}` : 'Association Committee Election'}
+                      </p>
+                    )}
                     {poll.service_category && (
                       <p className="text-[11px] font-medium text-blue-600">
                         Category: {poll.service_category}
@@ -566,12 +756,16 @@ export default function AdminVotingManage() {
                     <div className="flex items-center gap-2 mb-1">
                       <span
                         className={`text-xs font-bold uppercase tracking-wider px-2.5 py-0.5 rounded-full ${
-                          selectedPoll.poll_type === 'resolution_passing'
+                          selectedPoll.poll_type === 'election'
+                            ? 'bg-amber-100 text-amber-900 border border-amber-300'
+                            : selectedPoll.poll_type === 'resolution_passing'
                             ? 'bg-purple-100 text-purple-800'
                             : 'bg-blue-100 text-blue-800'
                         }`}
                       >
-                        {selectedPoll.poll_type === 'resolution_passing'
+                        {selectedPoll.poll_type === 'election'
+                          ? `🗳️ Association Election: ${selectedPoll.election_type === 'single_role' ? 'Single Role at a Time' : 'All Roles at a Time'}`
+                          : selectedPoll.poll_type === 'resolution_passing'
                           ? `Resolution: ${selectedPoll.resolution_task_type || 'General'}`
                           : `Vendor Selection: ${selectedPoll.service_category || 'Service'}`}
                       </span>
@@ -626,6 +820,51 @@ export default function AdminVotingManage() {
                   </div>
                 </div>
 
+                {/* Election Polling Officers Banner (If election) */}
+                {selectedPoll.poll_type === 'election' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-3.5 bg-amber-50/70 rounded-xl border border-amber-200 text-xs">
+                    <div className="flex items-start gap-2.5">
+                      <span className="text-xl mt-0.5">🏛️</span>
+                      <div>
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-900 block">
+                          Internal Polling Officer (Resident Member)
+                        </span>
+                        <p className="font-bold text-gray-900 text-sm mt-0.5">
+                          {selectedPoll.internal_officer_name || 'Not assigned'}
+                        </p>
+                        {selectedPoll.internal_officer_contact && (
+                          <p className="text-gray-600 text-[11px] mt-0.5">{selectedPoll.internal_officer_contact}</p>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex items-start gap-2.5 sm:border-l sm:border-amber-200 sm:pl-3.5">
+                      <span className="text-xl mt-0.5">🌐</span>
+                      <div>
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-900 block">
+                          External Polling Officer (Observer / Returning Officer)
+                        </span>
+                        <p className="font-bold text-gray-900 text-sm mt-0.5">
+                          {selectedPoll.external_officer_name || 'Not assigned'}
+                        </p>
+                        {selectedPoll.external_officer_contact && (
+                          <p className="text-gray-600 text-[11px] mt-0.5">{selectedPoll.external_officer_contact}</p>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Secret Ballot Note for Admins */}
+                {selectedPoll.poll_type === 'election' && (
+                  <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-center gap-2">
+                    <span className="text-base">🔒</span>
+                    <span>
+                      <strong>Secret Ballot Enforced:</strong> Resident members only cast their vote. Individual vote tallies are hidden from member screens. Only the winner(s) will be visible to members after election completion.
+                    </span>
+                  </div>
+                )}
+
                 {/* Voter Turnout Progress Bar */}
                 <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 space-y-2">
                   <div className="flex items-center justify-between text-xs">
@@ -663,8 +902,38 @@ export default function AdminVotingManage() {
                   </div>
                 </div>
 
-                {/* Winner Declaration Banner (If poll is closed) */}
-                {selectedPoll.status === 'closed' && winnerVendor && (
+                {/* Election Winners per Role (If election and closed) */}
+                {selectedPoll.poll_type === 'election' && selectedPoll.status === 'closed' && selectedPoll.role_winners_summary?.length > 0 && (
+                  <div className="p-4 bg-gradient-to-r from-amber-500 via-amber-600 to-yellow-600 text-white rounded-xl shadow-md space-y-3">
+                    <div className="flex items-center gap-2 border-b border-amber-400/40 pb-2">
+                      <span className="text-2xl">🏆</span>
+                      <div>
+                        <h3 className="text-sm font-extrabold tracking-wide uppercase">Official Election Winners Announced</h3>
+                        <p className="text-[11px] text-amber-100">Duly elected Executive Committee by association member vote</p>
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5">
+                      {selectedPoll.role_winners_summary.map((rw, rIdx) => (
+                        <div key={rIdx} className="bg-white/15 backdrop-blur-sm p-3 rounded-lg border border-white/20">
+                          <span className="text-[10px] font-bold text-amber-200 uppercase tracking-wider block">{rw.role}</span>
+                          {rw.winners.map((win, wIdx) => (
+                            <div key={wIdx} className="mt-1">
+                              <p className="font-extrabold text-sm text-white flex items-center gap-1">
+                                <span>🎖️</span> {win.name}
+                              </p>
+                              {win.vote_count !== null && (
+                                <span className="text-[11px] text-amber-100 font-semibold">{win.vote_count} votes</span>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {/* Non-election Winner Declaration Banner (If poll is closed) */}
+                {selectedPoll.poll_type !== 'election' && selectedPoll.status === 'closed' && winnerVendor && (
                   <div className="bg-gradient-to-r from-amber-500 to-amber-600 text-white p-4 rounded-xl shadow-sm flex items-center justify-between">
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 rounded-full bg-white/20 flex items-center justify-center text-xl">
@@ -748,9 +1017,17 @@ export default function AdminVotingManage() {
                 <div className="flex items-center justify-between">
                   <div>
                     <h3 className="text-base font-bold text-gray-900">
-                      {selectedPoll.poll_type === 'resolution_passing' ? 'Resolution Choices' : 'Vendor Quotations & Options'}
+                      {selectedPoll.poll_type === 'election'
+                        ? 'Election Contesting Candidates & Tallies'
+                        : selectedPoll.poll_type === 'resolution_passing'
+                        ? 'Resolution Choices'
+                        : 'Vendor Quotations & Options'}
                     </h3>
-                    <p className="text-xs text-gray-500">Breakdown of options and current tallies</p>
+                    <p className="text-xs text-gray-500">
+                      {selectedPoll.poll_type === 'election'
+                        ? 'Confidential vote counts visible only to Association Admin'
+                        : 'Breakdown of options and current tallies'}
+                    </p>
                   </div>
 
                   {selectedPoll.status === 'active' && selectedPoll.poll_type === 'vendor_selection' && (
@@ -774,33 +1051,38 @@ export default function AdminVotingManage() {
                       const vVotes = Number(vendor.vote_count || vendor.votes || 0);
                       const total = selectedPoll.total_votes || 1;
                       const percentage = vendor.percentage !== undefined ? vendor.percentage : Math.round((vVotes / total) * 100);
-                      const isWinner = winnerVendor?.id === vendor.id;
+                      const isWinner = vendor.is_winner || (winnerVendor?.id === vendor.id && selectedPoll.poll_type !== 'election');
 
                       return (
                         <div
                           key={vendor.id || idx}
                           className={`p-4 rounded-xl border transition ${
                             isWinner
-                              ? 'border-amber-300 bg-amber-50/20'
+                              ? 'border-amber-300 bg-amber-50/20 ring-1 ring-amber-300'
                               : 'border-gray-200 bg-white hover:border-gray-300'
                           }`}
                         >
                           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                             <div className="space-y-1">
-                              <div className="flex items-center gap-2">
+                              <div className="flex flex-wrap items-center gap-2">
                                 <h4 className="text-sm font-bold text-gray-900">{vendor.name}</h4>
+                                {selectedPoll.poll_type === 'election' && (
+                                  <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-blue-100 text-blue-800">
+                                    Role: {vendor.contesting_role || vendor.company || 'Executive Member'}
+                                  </span>
+                                )}
                                 {isWinner && (
                                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-amber-100 text-amber-800 flex items-center gap-1">
-                                    <HiTrophy className="w-3 h-3 text-amber-600" /> Leading / Winner
+                                    <HiTrophy className="w-3 h-3 text-amber-600" /> {selectedPoll.status === 'closed' ? 'Elected Winner' : 'Leading'}
                                   </span>
                                 )}
                               </div>
 
-                              {vendor.company && (
+                              {vendor.company && selectedPoll.poll_type !== 'election' && (
                                 <p className="text-xs text-gray-500">Company: {vendor.company}</p>
                               )}
                               {vendor.contact && (
-                                <p className="text-xs text-gray-500">Contact: {vendor.contact}</p>
+                                <p className="text-xs text-gray-500">Contact/Door: {vendor.contact}</p>
                               )}
                               {vendor.notes && (
                                 <p className="text-xs text-gray-600 italic">"{vendor.notes}"</p>
@@ -854,13 +1136,13 @@ export default function AdminVotingManage() {
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-2">
               Select Poll Type *
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
               <button
                 type="button"
                 onClick={() => setPollForm({ ...pollForm, poll_type: 'vendor_selection' })}
                 className={`p-3.5 rounded-xl border-2 text-left transition flex items-start gap-3 ${
                   pollForm.poll_type === 'vendor_selection'
-                    ? 'border-primary-600 bg-primary-50/50 text-primary-900'
+                    ? 'border-primary-600 bg-primary-50/50 text-primary-900 ring-1 ring-primary-500'
                     : 'border-gray-200 hover:border-gray-300 text-gray-700'
                 }`}
               >
@@ -868,7 +1150,7 @@ export default function AdminVotingManage() {
                 <div>
                   <h4 className="text-xs font-bold">Service Vendor Selection</h4>
                   <p className="text-[11px] text-gray-500 mt-0.5">
-                    Compare plumber, electrician, painter or contractor quotes.
+                    Compare contractor quotes (plumber, electrician, painter).
                   </p>
                 </div>
               </button>
@@ -878,7 +1160,7 @@ export default function AdminVotingManage() {
                 onClick={() => setPollForm({ ...pollForm, poll_type: 'resolution_passing' })}
                 className={`p-3.5 rounded-xl border-2 text-left transition flex items-start gap-3 ${
                   pollForm.poll_type === 'resolution_passing'
-                    ? 'border-purple-600 bg-purple-50/50 text-purple-900'
+                    ? 'border-purple-600 bg-purple-50/50 text-purple-900 ring-1 ring-purple-500'
                     : 'border-gray-200 hover:border-gray-300 text-gray-700'
                 }`}
               >
@@ -890,11 +1172,29 @@ export default function AdminVotingManage() {
                   </p>
                 </div>
               </button>
+
+              <button
+                type="button"
+                onClick={() => setPollForm({ ...pollForm, poll_type: 'election' })}
+                className={`p-3.5 rounded-xl border-2 text-left transition flex items-start gap-3 ${
+                  pollForm.poll_type === 'election'
+                    ? 'border-amber-600 bg-amber-50/60 text-amber-950 ring-1 ring-amber-500'
+                    : 'border-gray-200 hover:border-gray-300 text-gray-700'
+                }`}
+              >
+                <span className="text-xl flex-shrink-0 mt-0.5">🗳️</span>
+                <div>
+                  <h4 className="text-xs font-bold text-amber-950">Association Election Polling</h4>
+                  <p className="text-[11px] text-gray-500 mt-0.5">
+                    Executive committee election (all roles or single role) with polling officers & secret ballot.
+                  </p>
+                </div>
+              </button>
             </div>
           </div>
 
-          {/* Category / Task Type Picker */}
-          {pollForm.poll_type === 'vendor_selection' ? (
+          {/* Conditional Controls by Poll Type */}
+          {pollForm.poll_type === 'vendor_selection' && (
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
                 Service Category *
@@ -911,7 +1211,9 @@ export default function AdminVotingManage() {
                 ))}
               </select>
             </div>
-          ) : (
+          )}
+
+          {pollForm.poll_type === 'resolution_passing' && (
             <div>
               <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
                 Resolution Task / Project Type *
@@ -930,6 +1232,136 @@ export default function AdminVotingManage() {
             </div>
           )}
 
+          {/* Election Setup Section */}
+          {pollForm.poll_type === 'election' && (
+            <div className="space-y-4 p-4 bg-amber-50/50 rounded-2xl border border-amber-200">
+              {/* Election Scope: All Roles vs Single Role */}
+              <div>
+                <label className="block text-xs font-bold uppercase tracking-wider text-amber-900 mb-2">
+                  Election Scope / Type *
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <label
+                    className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition ${
+                      pollForm.election_type === 'all_roles'
+                        ? 'bg-amber-100/70 border-amber-500 text-amber-950 font-semibold'
+                        : 'bg-white border-gray-200 hover:border-amber-300 text-gray-700'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="election_type"
+                      checked={pollForm.election_type === 'all_roles'}
+                      onChange={() => setPollForm({ ...pollForm, election_type: 'all_roles' })}
+                      className="mt-0.5 text-amber-600 focus:ring-amber-500"
+                    />
+                    <div>
+                      <span className="text-xs font-bold block">All Roles at a Time</span>
+                      <span className="text-[11px] text-gray-500 block">
+                        Full Executive Committee ballot across multiple roles (President, Secretary, Treasurer, etc.)
+                      </span>
+                    </div>
+                  </label>
+
+                  <label
+                    className={`flex items-start gap-2.5 p-3 rounded-xl border cursor-pointer transition ${
+                      pollForm.election_type === 'single_role'
+                        ? 'bg-amber-100/70 border-amber-500 text-amber-950 font-semibold'
+                        : 'bg-white border-gray-200 hover:border-amber-300 text-gray-700'
+                    }`}
+                  >
+                    <input
+                      type="radio"
+                      name="election_type"
+                      checked={pollForm.election_type === 'single_role'}
+                      onChange={() => setPollForm({ ...pollForm, election_type: 'single_role' })}
+                      className="mt-0.5 text-amber-600 focus:ring-amber-500"
+                    />
+                    <div>
+                      <span className="text-xs font-bold block">Only One Role at a Time</span>
+                      <span className="text-[11px] text-gray-500 block">
+                        Dedicated election focused on a specific single post (e.g. President only)
+                      </span>
+                    </div>
+                  </label>
+                </div>
+              </div>
+
+              {/* Polling Officers Assignment */}
+              <div className="pt-2 border-t border-amber-200/60 space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="block text-xs font-bold uppercase tracking-wider text-amber-900">
+                    Official Polling Officers (Nominated by Admin) *
+                  </label>
+                  <span className="text-[10px] bg-amber-200/80 text-amber-900 font-bold px-2 py-0.5 rounded-full">
+                    2 Officers Required
+                  </span>
+                </div>
+                <p className="text-[11px] text-amber-800">
+                  Select 1 resident member as the Internal Polling Officer, and enter 1 outside observer as the External Polling Officer.
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  {/* Internal Polling Officer (Picked from Association Members) */}
+                  <div className="p-3 bg-white rounded-xl border border-amber-200 space-y-2">
+                    <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                      🏛️ Internal Polling Officer (Resident Member) *
+                    </span>
+                    <select
+                      value={pollForm.internal_officer_id}
+                      onChange={(e) => handleInternalOfficerSelect(e.target.value)}
+                      className="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white"
+                      required
+                    >
+                      <option value="">-- Choose Approved Member --</option>
+                      {associationMembers.map((m) => (
+                        <option key={m.id} value={m.id}>
+                          {m.name} {m.door_number ? `(Door ${m.door_number})` : ''} - {m.phone || m.email}
+                        </option>
+                      ))}
+                    </select>
+                    {pollForm.internal_officer_contact && (
+                      <p className="text-[11px] text-gray-500 italic">
+                        Contact: {pollForm.internal_officer_contact}
+                      </p>
+                    )}
+                  </div>
+
+                  {/* External Polling Officer (Outside person) */}
+                  <div className="p-3 bg-white rounded-xl border border-amber-200 space-y-2">
+                    <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                      🌐 External Polling Officer (Outside Observer) *
+                    </span>
+                    <input
+                      type="text"
+                      required
+                      placeholder="Officer Full Name *"
+                      value={pollForm.external_officer_name}
+                      onChange={(e) => setPollForm({ ...pollForm, external_officer_name: e.target.value })}
+                      className="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                    />
+                    <div className="grid grid-cols-2 gap-2">
+                      <input
+                        type="text"
+                        placeholder="Phone / Contact"
+                        value={pollForm.external_officer_contact}
+                        onChange={(e) => setPollForm({ ...pollForm, external_officer_contact: e.target.value })}
+                        className="w-full px-2 py-1 text-xs border border-gray-300 rounded-lg"
+                      />
+                      <input
+                        type="text"
+                        placeholder="Agency / Org / Title"
+                        value={pollForm.external_officer_org}
+                        onChange={(e) => setPollForm({ ...pollForm, external_officer_org: e.target.value })}
+                        className="w-full px-2 py-1 text-xs border border-gray-300 rounded-lg"
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Title & Description */}
           <div>
             <label className="block text-xs font-bold uppercase tracking-wider text-gray-700 mb-1">
@@ -939,7 +1371,9 @@ export default function AdminVotingManage() {
               type="text"
               required
               placeholder={
-                pollForm.poll_type === 'vendor_selection'
+                pollForm.poll_type === 'election'
+                  ? 'e.g. Annual Executive Committee General Election 2026-2027'
+                  : pollForm.poll_type === 'vendor_selection'
                   ? 'e.g. Layout Overhead Tank & Motor Plumbing Contractor Selection'
                   : 'e.g. Installation of Boom Barrier & 24/7 Security Gate at 1st Cross Road'
               }
@@ -1141,7 +1575,7 @@ export default function AdminVotingManage() {
                 </div>
               ))}
             </div>
-          ) : (
+          ) : pollForm.poll_type === 'resolution_passing' ? (
             /* Resolution passing Yes/No note */
             <div className="p-3 bg-purple-50 rounded-xl border border-purple-200 flex items-center justify-between text-xs text-purple-900">
               <span className="font-semibold">Automatic Ballot Options:</span>
@@ -1153,6 +1587,136 @@ export default function AdminVotingManage() {
                   ✗ No (Against / Reject)
                 </span>
               </div>
+            </div>
+          ) : (
+            /* Election Contesting Roles & Candidates Builder */
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <label className="block text-xs font-bold uppercase tracking-wider text-amber-900">
+                    {pollForm.election_type === 'single_role'
+                      ? 'Contesting Role & Candidates *'
+                      : `Executive Committee Roles & Candidates (${pollForm.election_roles_builder.length} Roles) *`}
+                  </label>
+                  <p className="text-[11px] text-gray-500">
+                    Type role names manually. Members can stand for any role they desire by notifying the admin.
+                  </p>
+                </div>
+
+                {pollForm.election_type === 'all_roles' && (
+                  <button
+                    type="button"
+                    onClick={handleAddElectionRole}
+                    className="inline-flex items-center gap-1 text-xs font-bold text-amber-800 hover:text-amber-950 bg-amber-100 hover:bg-amber-200 px-3 py-1.5 rounded-lg border border-amber-300 transition"
+                  >
+                    <HiPlus className="w-3.5 h-3.5" />
+                    <span>Add Another Role</span>
+                  </button>
+                )}
+              </div>
+
+              {pollForm.election_roles_builder.map((roleObj, rIdx) => (
+                <div
+                  key={rIdx}
+                  className="p-4 bg-amber-50/40 rounded-xl border border-amber-200 space-y-3"
+                >
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex-1 flex items-center gap-2">
+                      <span className="w-6 h-6 rounded-full bg-amber-200 text-amber-900 text-xs font-bold flex items-center justify-center flex-shrink-0">
+                        {rIdx + 1}
+                      </span>
+                      <div className="flex-1">
+                        <label className="block text-[10px] font-bold uppercase tracking-wider text-amber-900">
+                          Role / Designation Name * (Write manually)
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          placeholder="e.g. President, Secretary, Treasurer, Vice President"
+                          value={roleObj.role_name}
+                          onChange={(e) => handleRoleNameChange(rIdx, e.target.value)}
+                          className="w-full px-2.5 py-1.5 text-xs bg-white font-bold text-gray-900 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                        />
+                      </div>
+                    </div>
+
+                    {pollForm.election_type === 'all_roles' && pollForm.election_roles_builder.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveElectionRole(rIdx)}
+                        className="text-gray-400 hover:text-red-600 p-1.5 self-end mb-1"
+                        title="Remove Role"
+                      >
+                        <HiTrash className="w-4 h-4" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Contesting Candidates under this role */}
+                  <div className="space-y-2 pt-2 border-t border-amber-200/50">
+                    <div className="flex items-center justify-between">
+                      <span className="text-[11px] font-bold text-gray-700">
+                        Candidates Standing for {roleObj.role_name || 'this role'} ({(roleObj.candidates || []).length})
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => handleAddCandidateToRole(rIdx)}
+                        className="text-[11px] font-bold text-amber-700 hover:text-amber-900 flex items-center gap-1"
+                      >
+                        <HiPlus className="w-3 h-3" /> Add Candidate
+                      </button>
+                    </div>
+
+                    {(roleObj.candidates || []).map((cand, cIdx) => (
+                      <div
+                        key={cIdx}
+                        className="p-2.5 bg-white rounded-lg border border-gray-200 space-y-2"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[10px] font-bold text-gray-500">
+                            Candidate #{cIdx + 1}
+                          </span>
+                          {roleObj.candidates.length > 1 && (
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveCandidateFromRole(rIdx, cIdx)}
+                              className="text-gray-400 hover:text-red-600 p-0.5"
+                              title="Remove Candidate"
+                            >
+                              <HiTrash className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            required
+                            placeholder="Candidate Full Name *"
+                            value={cand.name}
+                            onChange={(e) => handleCandidateFieldChange(rIdx, cIdx, 'name', e.target.value)}
+                            className="px-2.5 py-1 text-xs border border-gray-300 rounded-lg"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Door / Contact / Flat Details"
+                            value={cand.contact}
+                            onChange={(e) => handleCandidateFieldChange(rIdx, cIdx, 'contact', e.target.value)}
+                            className="px-2.5 py-1 text-xs border border-gray-300 rounded-lg"
+                          />
+                        </div>
+                        <input
+                          type="text"
+                          placeholder="Candidate manifesto or note (optional)"
+                          value={cand.notes}
+                          onChange={(e) => handleCandidateFieldChange(rIdx, cIdx, 'notes', e.target.value)}
+                          className="w-full px-2.5 py-1 text-xs border border-gray-300 rounded-lg"
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 

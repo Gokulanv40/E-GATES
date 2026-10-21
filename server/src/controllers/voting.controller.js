@@ -24,7 +24,15 @@ const votingController = {
         target_audience = 'all',
         target_street,
         target_user_ids = [],
-        vendors = []
+        vendors = [],
+        // Election specific fields
+        election_type = 'all_roles',
+        internal_officer_name,
+        internal_officer_contact,
+        external_officer_name,
+        external_officer_contact,
+        election_roles = [],
+        candidates = []
       } = req.body;
 
       if (!title || !start_date || !end_date) {
@@ -57,8 +65,10 @@ const votingController = {
           association_id, created_by, title, description,
           start_date, end_date, is_anonymous, status,
           poll_type, service_category, resolution_task_type,
-          target_audience, target_street, target_user_ids
-        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', $8, $9, $10, $11, $12, $13)
+          target_audience, target_street, target_user_ids,
+          election_type, internal_officer_name, internal_officer_contact,
+          external_officer_name, external_officer_contact, election_roles
+        ) VALUES ($1, $2, $3, $4, $5, $6, $7, 'active', $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19)
         RETURNING *
       `;
 
@@ -75,7 +85,13 @@ const votingController = {
         resolution_task_type ? resolution_task_type.trim() : null,
         target_audience || 'all',
         target_street ? target_street.trim() : null,
-        JSON.stringify(Array.isArray(target_user_ids) ? target_user_ids : [])
+        JSON.stringify(Array.isArray(target_user_ids) ? target_user_ids : []),
+        poll_type === 'election' ? (election_type || 'all_roles') : null,
+        poll_type === 'election' ? (internal_officer_name ? internal_officer_name.trim() : null) : null,
+        poll_type === 'election' ? (internal_officer_contact ? internal_officer_contact.trim() : null) : null,
+        poll_type === 'election' ? (external_officer_name ? external_officer_name.trim() : null) : null,
+        poll_type === 'election' ? (external_officer_contact ? external_officer_contact.trim() : null) : null,
+        poll_type === 'election' ? JSON.stringify(Array.isArray(election_roles) ? election_roles : []) : null
       ];
 
       const result = await pool.query(insertQuery, values);
@@ -90,6 +106,26 @@ const votingController = {
            ($1, 'No (Against / Reject)', NULL, 'Reject proposed resolution')`,
           [poll.id]
         );
+      } else if (poll_type === 'election') {
+        // Populate candidates for election
+        const candidateList = Array.isArray(candidates) && candidates.length > 0 ? candidates : vendors;
+        for (const c of candidateList) {
+          if (c && c.name && c.name.trim()) {
+            const roleName = (c.contesting_role || c.company || 'Executive Committee Member').trim();
+            await pool.query(
+              `INSERT INTO poll_vendors (poll_id, name, company, contesting_role, contact, notes)
+               VALUES ($1, $2, $3, $4, $5, $6)`,
+              [
+                poll.id,
+                c.name.trim(),
+                roleName,
+                roleName,
+                c.contact ? c.contact.trim() : null,
+                c.notes ? c.notes.trim() : null
+              ]
+            );
+          }
+        }
       } else if (Array.isArray(vendors) && vendors.length > 0) {
         for (const v of vendors) {
           if (v && v.name && v.name.trim()) {
@@ -216,13 +252,14 @@ const votingController = {
         });
       }
 
-      // Check if logged-in user has voted and for which vendor
+      // Check if logged-in user has voted and for which vendor(s)
       const userVoteRes = await pool.query(
         'SELECT vendor_id FROM votes WHERE poll_id = $1 AND user_id = $2',
         [pollId, userId]
       );
       const hasVoted = userVoteRes.rows.length > 0;
       const userVotedVendorId = hasVoted ? userVoteRes.rows[0].vendor_id : null;
+      const userVotedVendorIds = userVoteRes.rows.map(r => r.vendor_id);
 
       // Get vendors with vote counts
       const vendorsRes = await pool.query(
@@ -235,28 +272,93 @@ const votingController = {
         [pollId]
       );
 
-      const totalVotesRes = await pool.query('SELECT COUNT(*) FROM votes WHERE poll_id = $1', [pollId]);
+      const totalVotesRes = await pool.query(
+        'SELECT COUNT(DISTINCT user_id) as count FROM votes WHERE poll_id = $1',
+        [pollId]
+      );
       const totalVotes = parseInt(totalVotesRes.rows[0].count, 10);
+
+      const isClosed = poll.status === 'closed' || (poll.end_date && new Date(poll.end_date) < new Date());
+      const isElection = poll.poll_type === 'election';
+      const isMember = role === 'member';
+
+      // Group candidates by role and determine winner(s) per role
+      const roleGroups = {};
+      vendorsRes.rows.forEach(v => {
+        const roleName = (v.contesting_role || v.company || 'Executive Committee Member').trim();
+        if (!roleGroups[roleName]) {
+          roleGroups[roleName] = [];
+        }
+        roleGroups[roleName].push(v);
+      });
+
+      const roleWinners = {};
+      for (const [rName, cands] of Object.entries(roleGroups)) {
+        let maxRCount = -1;
+        let rWinners = [];
+        for (const c of cands) {
+          const cnt = parseInt(c.vote_count, 10);
+          if (cnt > maxRCount) {
+            maxRCount = cnt;
+            rWinners = [c.id];
+          } else if (cnt === maxRCount && cnt > 0) {
+            rWinners.push(c.id);
+          }
+        }
+        roleWinners[rName] = maxRCount > 0 ? rWinners : [];
+      }
 
       let maxVotes = 0;
       let winnerId = null;
 
       const vendorsWithStats = vendorsRes.rows.map(v => {
         const count = parseInt(v.vote_count, 10);
-        const percentage = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+        const roleName = (v.contesting_role || v.company || 'Executive Committee Member').trim();
+        const isWinner = isClosed && (roleWinners[roleName] || []).includes(v.id);
+
         if (count > maxVotes) {
           maxVotes = count;
           winnerId = v.id;
         }
+
+        // Secret ballot enforcement: members do not see vote counts or percentages
+        if (isElection && isMember) {
+          return {
+            ...v,
+            quotation: v.quotation ? parseFloat(v.quotation) : null,
+            vote_count: null,
+            percentage: null,
+            is_winner: isClosed ? isWinner : false
+          };
+        }
+
+        const percentage = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
         return {
           ...v,
           quotation: v.quotation ? parseFloat(v.quotation) : null,
           vote_count: count,
-          percentage
+          percentage,
+          is_winner: isClosed ? isWinner : false
         };
       });
 
-      const isClosed = poll.status === 'closed' || (poll.end_date && new Date(poll.end_date) < new Date());
+      // Role winners summary for election announcement
+      const roleWinnersSummary = [];
+      if (isElection && isClosed) {
+        for (const [rName, winIds] of Object.entries(roleWinners)) {
+          const winningCandidates = vendorsRes.rows.filter(v => winIds.includes(v.id));
+          roleWinnersSummary.push({
+            role: rName,
+            winners: winningCandidates.map(w => ({
+              id: w.id,
+              name: w.name,
+              contact: w.contact,
+              notes: w.notes,
+              vote_count: isMember ? null : parseInt(w.vote_count, 10)
+            }))
+          });
+        }
+      }
 
       // Calculate eligible voters
       let eligibleVotersCount = 0;
@@ -315,12 +417,15 @@ const votingController = {
           status: isClosed ? 'closed' : poll.status,
           has_voted: hasVoted,
           user_voted_vendor_id: userVotedVendorId,
-          total_votes: totalVotes,
+          user_voted_vendor_ids: userVotedVendorIds,
+          total_votes: (isElection && isMember && !isClosed) ? null : totalVotes,
           eligible_voters_count: eligibleVotersCount,
-          turnout_percentage: eligibleVotersCount > 0 ? Math.min(100, Math.round((totalVotes / eligibleVotersCount) * 100)) : 0,
+          turnout_percentage: (isElection && isMember && !isClosed) ? null : (eligibleVotersCount > 0 ? Math.min(100, Math.round((totalVotes / eligibleVotersCount) * 100)) : 0),
           is_user_eligible: isUserEligible,
           eligibility_reason: eligibilityReason,
           winner_vendor_id: isClosed && totalVotes > 0 ? winnerId : null,
+          role_winners: roleWinners,
+          role_winners_summary: roleWinnersSummary,
           vendors: vendorsWithStats
         }
       });
@@ -635,14 +740,7 @@ const votingController = {
     try {
       const pollId = parseInt(req.params.id, 10);
       const userId = req.user.id;
-      const { vendor_id } = req.body;
-
-      if (!vendor_id) {
-        return res.status(400).json({
-          success: false,
-          message: 'Vendor ID is required to cast vote'
-        });
-      }
+      const { vendor_id, candidate_ids } = req.body;
 
       // Check poll exists
       const pollRes = await pool.query('SELECT * FROM polls WHERE id = $1', [pollId]);
@@ -654,6 +752,18 @@ const votingController = {
       }
 
       const poll = pollRes.rows[0];
+
+      // Handle candidate IDs or vendor_id
+      const chosenCandidateIds = Array.isArray(candidate_ids) && candidate_ids.length > 0
+        ? candidate_ids.map(Number).filter(Boolean)
+        : (vendor_id ? [Number(vendor_id)] : []);
+
+      if (chosenCandidateIds.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: poll.poll_type === 'election' ? 'Please select at least one candidate' : 'Vendor selection is required to cast vote'
+        });
+      }
 
       // Check association match
       if (req.user.role !== 'super_admin' && poll.association_id !== req.user.association_id) {
@@ -711,19 +821,31 @@ const votingController = {
         });
       }
 
-      // Verify vendor belongs to this poll
-      const vendorCheck = await pool.query(
-        'SELECT id FROM poll_vendors WHERE id = $1 AND poll_id = $2',
-        [vendor_id, pollId]
+      // Verify candidates belong to this poll
+      const candCheck = await pool.query(
+        'SELECT id, contesting_role FROM poll_vendors WHERE poll_id = $1 AND id = ANY($2)',
+        [pollId, chosenCandidateIds]
       );
-      if (vendorCheck.rows.length === 0) {
+      if (candCheck.rows.length !== chosenCandidateIds.length) {
         return res.status(400).json({
           success: false,
-          message: 'Selected vendor does not belong to this poll'
+          message: 'One or more selected candidates do not belong to this poll'
         });
       }
 
-      // Check for duplicate vote
+      // If election, enforce 1 candidate per contesting role
+      if (poll.poll_type === 'election') {
+        const rolesVoted = candCheck.rows.map(c => (c.contesting_role || 'Executive Committee Member').trim());
+        const uniqueRoles = new Set(rolesVoted);
+        if (uniqueRoles.size !== rolesVoted.length) {
+          return res.status(400).json({
+            success: false,
+            message: 'You can only vote for one candidate per role'
+          });
+        }
+      }
+
+      // Check for duplicate vote (user already voted in this poll)
       const voteCheck = await pool.query(
         'SELECT id FROM votes WHERE poll_id = $1 AND user_id = $2',
         [pollId, userId]
@@ -731,15 +853,19 @@ const votingController = {
       if (voteCheck.rows.length > 0) {
         return res.status(400).json({
           success: false,
-          message: 'You have already cast your vote in this poll'
+          message: poll.poll_type === 'election' 
+            ? 'You have already submitted your election ballot' 
+            : 'You have already cast your vote in this poll'
         });
       }
 
-      // Insert vote
-      await pool.query(
-        'INSERT INTO votes (poll_id, user_id, vendor_id) VALUES ($1, $2, $3)',
-        [pollId, userId, vendor_id]
-      );
+      // Insert vote(s)
+      for (const cid of chosenCandidateIds) {
+        await pool.query(
+          'INSERT INTO votes (poll_id, user_id, vendor_id) VALUES ($1, $2, $3)',
+          [pollId, userId, cid]
+        );
+      }
 
       // Fetch updated results
       const vendorsRes = await pool.query(
@@ -751,7 +877,10 @@ const votingController = {
         [pollId]
       );
 
-      const totalVotesRes = await pool.query('SELECT COUNT(*) FROM votes WHERE poll_id = $1', [pollId]);
+      const totalVotesRes = await pool.query(
+        'SELECT COUNT(DISTINCT user_id) as count FROM votes WHERE poll_id = $1',
+        [pollId]
+      );
       const totalVotes = parseInt(totalVotesRes.rows[0].count, 10);
 
       // Check total eligible members for auto-ending
@@ -783,13 +912,14 @@ const votingController = {
         pollEndedAuto = true;
       }
 
+      const isElection = poll.poll_type === 'election';
       const updatedResults = {
         poll_id: pollId,
-        total_votes: totalVotes,
+        total_votes: isElection ? null : totalVotes,
         eligible_voters_count: eligibleCount,
         status: pollEndedAuto ? 'closed' : poll.status,
         auto_ended: pollEndedAuto,
-        vendors: vendorsRes.rows.map(v => {
+        vendors: isElection ? [] : vendorsRes.rows.map(v => {
           const count = parseInt(v.vote_count, 10);
           return {
             id: v.id,
@@ -804,7 +934,7 @@ const votingController = {
       try {
         const io = typeof getIO === 'function' ? getIO() : null;
         if (io) {
-          io.to(`poll_${pollId}`).emit('vote:cast', { poll_id: pollId, vendor_id });
+          io.to(`poll_${pollId}`).emit('vote:cast', { poll_id: pollId, candidate_ids: chosenCandidateIds });
           io.to(`poll_${pollId}`).emit('vote:results', updatedResults);
           io.to(`association_${poll.association_id}`).emit('vote:results', updatedResults);
           if (pollEndedAuto) {
@@ -819,7 +949,10 @@ const votingController = {
       res.status(201).json({
         success: true,
         message: 'Vote cast successfully',
-        data: updatedResults
+        data: {
+          ...updatedResults,
+          user_voted_vendor_ids: chosenCandidateIds
+        }
       });
     } catch (error) {
       next(error);

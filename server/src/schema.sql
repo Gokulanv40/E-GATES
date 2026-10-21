@@ -111,15 +111,28 @@ CREATE TABLE IF NOT EXISTS polls (
   end_date TIMESTAMPTZ NOT NULL,
   is_anonymous BOOLEAN DEFAULT false,
   status VARCHAR(20) DEFAULT 'active' CHECK (status IN ('active', 'closed')),
+  poll_type VARCHAR(50) DEFAULT 'vendor_selection',
+  service_category VARCHAR(100),
+  resolution_task_type VARCHAR(100),
+  target_audience VARCHAR(50) DEFAULT 'all',
+  target_street VARCHAR(255),
+  target_user_ids TEXT,
+  election_type VARCHAR(50),
+  internal_officer_name VARCHAR(255),
+  internal_officer_contact VARCHAR(100),
+  external_officer_name VARCHAR(255),
+  external_officer_contact VARCHAR(100),
+  election_roles TEXT,
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 8. Poll Vendors
+-- 8. Poll Vendors / Candidates
 CREATE TABLE IF NOT EXISTS poll_vendors (
   id SERIAL PRIMARY KEY,
   poll_id INTEGER NOT NULL REFERENCES polls(id) ON DELETE CASCADE,
   name VARCHAR(255) NOT NULL,
   company VARCHAR(255),
+  contesting_role VARCHAR(255),
   contact VARCHAR(255),
   quotation DECIMAL(12, 2),
   notes TEXT,
