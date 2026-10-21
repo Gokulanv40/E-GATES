@@ -608,91 +608,139 @@ export default function MemberVotingPage() {
                         No contesting candidates configured for this election.
                       </div>
                     ) : (
-                      Object.entries(electionRoleGroups).map(([roleName, candidates], rIdx) => (
-                        <div key={rIdx} className="p-4 bg-gray-50/70 rounded-2xl border border-gray-200 space-y-3">
-                          <div className="flex items-center justify-between">
-                            <div className="flex items-center gap-2">
-                              <span className="w-6 h-6 rounded-full bg-amber-200 text-amber-900 text-xs font-bold flex items-center justify-center">
-                                {rIdx + 1}
-                              </span>
-                              <h4 className="text-sm font-bold text-gray-900 uppercase tracking-wide">
-                                Role: {roleName}
-                              </h4>
-                            </div>
-                            <span className="text-[11px] text-gray-500 font-medium">
-                              {candidates.length} Candidate{candidates.length > 1 ? 's' : ''} Contesting
-                            </span>
-                          </div>
+                      Object.entries(electionRoleGroups).map(([roleName, candidates], rIdx) => {
+                        const hasSelectedForThisRole = Boolean(selectedElectionCandidates[roleName]);
+                        const isVotedForThisRole = candidates.some((c) => myVotedVendorIds.includes(Number(c.id)));
 
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                            {candidates.map((cand) => {
-                              const isMyChoice = myVotedVendorIds.includes(Number(cand.id));
-                              const isSelectedInDraft = selectedElectionCandidates[roleName] === cand.id;
-                              const isWinner = cand.is_winner && selectedPoll.status === 'closed';
-
-                              return (
-                                <div
-                                  key={cand.id}
-                                  onClick={() => {
-                                    if (selectedPoll.status === 'active' && !hasUserVoted && selectedPoll.is_user_eligible !== false) {
-                                      handleSelectElectionCandidate(roleName, cand.id);
-                                    }
-                                  }}
-                                  className={`p-3.5 rounded-xl border transition ${
-                                    isMyChoice
-                                      ? 'bg-green-50/70 border-green-400 ring-2 ring-green-300'
-                                      : isSelectedInDraft
-                                      ? 'bg-amber-50/80 border-amber-500 ring-2 ring-amber-300'
-                                      : isWinner
-                                      ? 'bg-amber-50/60 border-amber-400 ring-1 ring-amber-300'
-                                      : selectedPoll.status === 'active' && !hasUserVoted
-                                      ? 'bg-white hover:border-amber-300 cursor-pointer border-gray-200'
-                                      : 'bg-white border-gray-200'
-                                  }`}
-                                >
-                                  <div className="flex items-start justify-between gap-2">
-                                    <div className="space-y-0.5">
-                                      <h5 className="text-sm font-bold text-gray-900 flex items-center gap-1.5">
-                                        {cand.name}
-                                        {isWinner && (
-                                          <span className="text-xs bg-amber-500 text-white px-2 py-0.2 rounded-full font-extrabold flex items-center gap-0.5">
-                                            <HiTrophy className="w-3 h-3" /> Winner
-                                          </span>
-                                        )}
-                                      </h5>
-                                      {cand.contact && (
-                                        <p className="text-[11px] text-gray-500">{cand.contact}</p>
-                                      )}
-                                      {cand.notes && (
-                                        <p className="text-[11px] text-gray-600 italic mt-1 bg-gray-50 p-1.5 rounded">
-                                          "{cand.notes}"
-                                        </p>
-                                      )}
-                                    </div>
-
-                                    <div>
-                                      {isMyChoice ? (
-                                        <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-green-600 text-white">
-                                          <HiCheckCircle className="w-3.5 h-3.5" />
-                                          Voted
-                                        </span>
-                                      ) : selectedPoll.status === 'active' && !hasUserVoted && selectedPoll.is_user_eligible !== false ? (
-                                        <input
-                                          type="radio"
-                                          name={`role_selection_${roleName}`}
-                                          checked={isSelectedInDraft}
-                                          onChange={() => handleSelectElectionCandidate(roleName, cand.id)}
-                                          className="w-4 h-4 text-amber-600 focus:ring-amber-500 cursor-pointer"
-                                        />
-                                      ) : null}
-                                    </div>
-                                  </div>
+                        return (
+                          <div
+                            key={rIdx}
+                            className="bg-white rounded-2xl border-2 border-amber-200/90 shadow-sm overflow-hidden space-y-0"
+                          >
+                            {/* Prominent Role Election Heading */}
+                            <div className="bg-gradient-to-r from-amber-500 via-amber-600 to-amber-700 text-white p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-2 shadow-sm">
+                              <div className="flex items-center gap-3">
+                                <span className="w-9 h-9 rounded-xl bg-white/20 backdrop-blur-xs text-white font-black flex items-center justify-center text-sm shadow-inner">
+                                  #{rIdx + 1}
+                                </span>
+                                <div>
+                                  <h4 className="text-base font-black tracking-wide uppercase flex items-center gap-2">
+                                    <span>🗳️</span> {roleName} Election
+                                  </h4>
+                                  <p className="text-xs text-amber-100 font-medium">
+                                    {candidates.length} candidate{candidates.length > 1 ? 's' : ''} contesting for {roleName} • Pick 1 candidate below
+                                  </p>
                                 </div>
-                              );
-                            })}
+                              </div>
+
+                              <div>
+                                {isVotedForThisRole ? (
+                                  <span className="inline-flex items-center gap-1 text-xs font-bold bg-white text-green-700 px-3 py-1 rounded-full shadow-xs">
+                                    <HiCheckCircle className="w-4 h-4 text-green-600" />
+                                    Vote Cast for this Role
+                                  </span>
+                                ) : hasSelectedForThisRole ? (
+                                  <span className="inline-flex items-center gap-1 text-xs font-bold bg-white text-amber-900 px-3 py-1 rounded-full shadow-xs">
+                                    ✓ 1 Selected
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-xs font-bold bg-amber-800/60 text-amber-100 px-3 py-1 rounded-full">
+                                    Selection Pending
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Contesting Candidates for this Role */}
+                            <div className="p-4 bg-amber-50/20">
+                              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5">
+                                {candidates.map((cand, cIdx) => {
+                                  const isMyChoice = myVotedVendorIds.includes(Number(cand.id));
+                                  const isSelectedInDraft = selectedElectionCandidates[roleName] === cand.id;
+                                  const isWinner = cand.is_winner && selectedPoll.status === 'closed';
+
+                                  return (
+                                    <div
+                                      key={cand.id}
+                                      onClick={() => {
+                                        if (selectedPoll.status === 'active' && !hasUserVoted && selectedPoll.is_user_eligible !== false) {
+                                          handleSelectElectionCandidate(roleName, cand.id);
+                                        }
+                                      }}
+                                      className={`p-4 rounded-xl border-2 transition relative flex flex-col justify-between ${
+                                        isMyChoice
+                                          ? 'bg-green-50/80 border-green-500 ring-2 ring-green-300 shadow-sm'
+                                          : isSelectedInDraft
+                                          ? 'bg-amber-50 border-amber-600 ring-2 ring-amber-400 shadow-sm'
+                                          : isWinner
+                                          ? 'bg-amber-50/70 border-amber-400 ring-1 ring-amber-300'
+                                          : selectedPoll.status === 'active' && !hasUserVoted
+                                          ? 'bg-white hover:border-amber-400 cursor-pointer border-gray-200 hover:shadow-xs'
+                                          : 'bg-white border-gray-200'
+                                      }`}
+                                    >
+                                      <div>
+                                        <div className="flex items-start justify-between gap-2 mb-1.5">
+                                          <div className="flex items-center gap-2">
+                                            <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-900 text-[11px] font-bold flex items-center justify-center">
+                                              {cIdx + 1}
+                                            </span>
+                                            <h5 className="text-sm font-extrabold text-gray-900">
+                                              {cand.name}
+                                            </h5>
+                                          </div>
+
+                                          <div>
+                                            {isMyChoice ? (
+                                              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-bold bg-green-600 text-white">
+                                                <HiCheckCircle className="w-3.5 h-3.5" />
+                                                Your Vote
+                                              </span>
+                                            ) : selectedPoll.status === 'active' && !hasUserVoted && selectedPoll.is_user_eligible !== false ? (
+                                              <label className="flex items-center gap-1.5 cursor-pointer text-xs font-bold text-amber-900">
+                                                <input
+                                                  type="radio"
+                                                  name={`role_selection_${roleName}`}
+                                                  checked={isSelectedInDraft}
+                                                  onChange={() => handleSelectElectionCandidate(roleName, cand.id)}
+                                                  className="w-4 h-4 text-amber-600 focus:ring-amber-500 cursor-pointer"
+                                                />
+                                                <span className={isSelectedInDraft ? 'text-amber-800' : 'text-gray-400'}>
+                                                  {isSelectedInDraft ? 'Selected' : 'Vote'}
+                                                </span>
+                                              </label>
+                                            ) : null}
+                                          </div>
+                                        </div>
+
+                                        {cand.contact && (
+                                          <p className="text-xs text-gray-500 font-medium pl-7">
+                                            📍 {cand.contact}
+                                          </p>
+                                        )}
+
+                                        {cand.notes && (
+                                          <p className="text-xs text-gray-700 italic mt-2.5 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                                            "{cand.notes}"
+                                          </p>
+                                        )}
+                                      </div>
+
+                                      {isWinner && (
+                                        <div className="mt-3 pt-2 border-t border-amber-200 flex items-center justify-between">
+                                          <span className="text-xs bg-amber-500 text-white px-2.5 py-0.5 rounded-full font-extrabold flex items-center gap-1">
+                                            <HiTrophy className="w-3.5 h-3.5" /> Official Elected Winner
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
                           </div>
-                        </div>
-                      ))
+                        );
+                      })
                     )}
                   </div>
 

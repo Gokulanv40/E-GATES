@@ -103,12 +103,21 @@ export default function AdminVotingManage() {
     internal_officer_id: '',
     internal_officer_name: '',
     internal_officer_contact: '',
+    external_officer_id: '',
     external_officer_name: '',
     external_officer_contact: '',
     external_officer_org: '',
+    external_officer_is_manual: false,
     election_roles_builder: [
       {
         role_name: 'President',
+        candidates: [
+          { name: '', contact: '', notes: '' },
+          { name: '', contact: '', notes: '' },
+        ],
+      },
+      {
+        role_name: 'Secretary',
         candidates: [
           { name: '', contact: '', notes: '' },
           { name: '', contact: '', notes: '' },
@@ -200,6 +209,29 @@ export default function AdminVotingManage() {
         internal_officer_id: '',
         internal_officer_name: '',
         internal_officer_contact: '',
+      }));
+    }
+  };
+
+  const handleExternalOfficerSelect = (userId) => {
+    const member = associationMembers.find((m) => String(m.id) === String(userId));
+    if (member) {
+      setPollForm((prev) => ({
+        ...prev,
+        external_officer_id: member.id,
+        external_officer_name: member.name,
+        external_officer_contact: member.door_number
+          ? `Door ${member.door_number}${member.phone ? `, Tel: ${member.phone}` : ''}`
+          : member.phone || member.email || '',
+        external_officer_org: 'Resident Member / Returning Officer',
+      }));
+    } else {
+      setPollForm((prev) => ({
+        ...prev,
+        external_officer_id: '',
+        external_officer_name: '',
+        external_officer_contact: '',
+        external_officer_org: '',
       }));
     }
   };
@@ -452,12 +484,21 @@ export default function AdminVotingManage() {
         internal_officer_id: '',
         internal_officer_name: '',
         internal_officer_contact: '',
+        external_officer_id: '',
         external_officer_name: '',
         external_officer_contact: '',
         external_officer_org: '',
+        external_officer_is_manual: false,
         election_roles_builder: [
           {
             role_name: 'President',
+            candidates: [
+              { name: '', contact: '', notes: '' },
+              { name: '', contact: '', notes: '' },
+            ],
+          },
+          {
+            role_name: 'Secretary',
             candidates: [
               { name: '', contact: '', notes: '' },
               { name: '', contact: '', notes: '' },
@@ -658,7 +699,7 @@ export default function AdminVotingManage() {
         <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden flex flex-col">
           <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
             <h2 className="text-sm font-bold text-gray-900 uppercase tracking-wider">
-              All Association Polls ({polls.length})
+              Community Voting & Election Polls ({polls.length})
             </h2>
           </div>
 
@@ -891,7 +932,7 @@ export default function AdminVotingManage() {
                           ? `Street: ${selectedPoll.target_street}`
                           : selectedPoll.target_audience === 'selected'
                           ? 'Designated Committee / Selected Members'
-                          : 'All Association Members'}
+                          : 'All Residents (This Layout Only)'}
                       </strong>
                     </span>
                     <span>
@@ -1041,11 +1082,100 @@ export default function AdminVotingManage() {
                   )}
                 </div>
 
-                <div className="space-y-3">
+                <div className="space-y-4">
                   {!selectedPoll.vendors || selectedPoll.vendors.length === 0 ? (
                     <div className="py-8 text-center text-xs text-gray-400 italic">
                       No options found. Click "Add Option" to add proposals.
                     </div>
+                  ) : selectedPoll.poll_type === 'election' ? (
+                    /* Grouped by Role for Election */
+                    (() => {
+                      const roleGroups = {};
+                      selectedPoll.vendors.forEach((v) => {
+                        const rName = (v.contesting_role || v.company || 'Executive Committee Member').trim();
+                        if (!roleGroups[rName]) roleGroups[rName] = [];
+                        roleGroups[rName].push(v);
+                      });
+
+                      return Object.entries(roleGroups).map(([roleName, cands], rIdx) => {
+                        const roleTotalVotes = cands.reduce((acc, c) => acc + Number(c.vote_count || 0), 0);
+
+                        return (
+                          <div key={rIdx} className="p-4 bg-amber-50/30 rounded-2xl border border-amber-200/90 space-y-3">
+                            <div className="flex items-center justify-between border-b border-amber-200/60 pb-2">
+                              <h4 className="text-sm font-black text-gray-900 uppercase tracking-wide flex items-center gap-2">
+                                <span>🏛️</span> {roleName} Election
+                              </h4>
+                              <span className="text-xs font-bold text-amber-900 bg-amber-100 px-3 py-1 rounded-full border border-amber-300">
+                                {cands.length} Candidate{cands.length > 1 ? 's' : ''} Standing • {roleTotalVotes} Role Votes
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                              {cands.map((cand, cIdx) => {
+                                const vVotes = Number(cand.vote_count || 0);
+                                const pct = roleTotalVotes > 0 ? Math.round((vVotes / roleTotalVotes) * 100) : 0;
+                                const isWinner = cand.is_winner;
+
+                                return (
+                                  <div
+                                    key={cand.id || cIdx}
+                                    className={`p-3.5 rounded-xl border transition ${
+                                      isWinner
+                                        ? 'border-amber-400 bg-amber-50/80 ring-2 ring-amber-300'
+                                        : 'border-gray-200 bg-white hover:border-gray-300'
+                                    }`}
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="space-y-0.5">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="w-5 h-5 rounded-full bg-amber-100 text-amber-900 text-[10px] font-bold flex items-center justify-center">
+                                            {cIdx + 1}
+                                          </span>
+                                          <h5 className="text-sm font-extrabold text-gray-900">{cand.name}</h5>
+                                        </div>
+                                        {cand.contact && (
+                                          <p className="text-xs text-gray-500 pl-6.5">📍 {cand.contact}</p>
+                                        )}
+                                        {cand.notes && (
+                                          <p className="text-xs text-gray-600 italic mt-1 bg-gray-50 p-1.5 rounded">
+                                            "{cand.notes}"
+                                          </p>
+                                        )}
+                                      </div>
+
+                                      <div className="text-right flex flex-col items-end">
+                                        <span className="text-sm font-extrabold text-primary-700">
+                                          {vVotes} Votes
+                                        </span>
+                                        <span className="text-[11px] text-gray-500 font-semibold">
+                                          ({pct}%)
+                                        </span>
+                                        {isWinner && (
+                                          <span className="mt-1 px-2 py-0.5 rounded text-[10px] font-extrabold bg-amber-500 text-white flex items-center gap-0.5">
+                                            <HiTrophy className="w-3 h-3" /> {selectedPoll.status === 'closed' ? 'Elected' : 'Leading'}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Progress bar */}
+                                    <div className="mt-2.5 w-full bg-gray-100 rounded-full h-2 overflow-hidden">
+                                      <div
+                                        className={`h-2 rounded-full transition-all duration-300 ${
+                                          isWinner ? 'bg-amber-500' : 'bg-primary-600'
+                                        }`}
+                                        style={{ width: `${pct}%` }}
+                                      />
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </div>
+                        );
+                      });
+                    })()
                   ) : (
                     selectedPoll.vendors.map((vendor, idx) => {
                       const vVotes = Number(vendor.vote_count || vendor.votes || 0);
@@ -1327,35 +1457,84 @@ export default function AdminVotingManage() {
                     )}
                   </div>
 
-                  {/* External Polling Officer (Outside person) */}
+                  {/* External Polling Officer (Choose Approved Member or Enter Outside Observer) */}
                   <div className="p-3 bg-white rounded-xl border border-amber-200 space-y-2">
-                    <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
-                      🌐 External Polling Officer (Outside Observer) *
-                    </span>
-                    <input
-                      type="text"
-                      required
-                      placeholder="Officer Full Name *"
-                      value={pollForm.external_officer_name}
-                      onChange={(e) => setPollForm({ ...pollForm, external_officer_name: e.target.value })}
-                      className="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
-                    />
-                    <div className="grid grid-cols-2 gap-2">
-                      <input
-                        type="text"
-                        placeholder="Phone / Contact"
-                        value={pollForm.external_officer_contact}
-                        onChange={(e) => setPollForm({ ...pollForm, external_officer_contact: e.target.value })}
-                        className="w-full px-2 py-1 text-xs border border-gray-300 rounded-lg"
-                      />
-                      <input
-                        type="text"
-                        placeholder="Agency / Org / Title"
-                        value={pollForm.external_officer_org}
-                        onChange={(e) => setPollForm({ ...pollForm, external_officer_org: e.target.value })}
-                        className="w-full px-2 py-1 text-xs border border-gray-300 rounded-lg"
-                      />
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
+                        🌐 External Polling Officer *
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setPollForm((prev) => ({
+                            ...prev,
+                            external_officer_is_manual: !prev.external_officer_is_manual,
+                            external_officer_id: '',
+                            external_officer_name: '',
+                            external_officer_contact: '',
+                            external_officer_org: '',
+                          }));
+                        }}
+                        className="text-[10px] text-amber-700 hover:text-amber-900 underline font-semibold"
+                      >
+                        {pollForm.external_officer_is_manual ? 'Choose from Members' : 'Enter Outside Person'}
+                      </button>
                     </div>
+
+                    {!pollForm.external_officer_is_manual ? (
+                      <div>
+                        <select
+                          value={pollForm.external_officer_id || ''}
+                          onChange={(e) => handleExternalOfficerSelect(e.target.value)}
+                          className="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500 bg-white"
+                          required={!pollForm.external_officer_is_manual}
+                        >
+                          <option value="">-- Choose Approved Member --</option>
+                          {associationMembers.map((m) => (
+                            <option
+                              key={m.id}
+                              value={m.id}
+                              disabled={String(m.id) === String(pollForm.internal_officer_id)}
+                            >
+                              {m.name} {m.door_number ? `(Door ${m.door_number})` : ''} - {m.phone || m.email}
+                              {String(m.id) === String(pollForm.internal_officer_id) ? ' (Already Selected as Internal Officer)' : ''}
+                            </option>
+                          ))}
+                        </select>
+                        {pollForm.external_officer_name && (
+                          <p className="text-[11px] text-gray-500 italic mt-1">
+                            Selected: {pollForm.external_officer_name} ({pollForm.external_officer_contact})
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <input
+                          type="text"
+                          required
+                          placeholder="Outside Observer Full Name *"
+                          value={pollForm.external_officer_name}
+                          onChange={(e) => setPollForm({ ...pollForm, external_officer_name: e.target.value })}
+                          className="w-full px-2.5 py-1.5 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-amber-500"
+                        />
+                        <div className="grid grid-cols-2 gap-2">
+                          <input
+                            type="text"
+                            placeholder="Phone / Contact"
+                            value={pollForm.external_officer_contact}
+                            onChange={(e) => setPollForm({ ...pollForm, external_officer_contact: e.target.value })}
+                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded-lg"
+                          />
+                          <input
+                            type="text"
+                            placeholder="Agency / Designation"
+                            value={pollForm.external_officer_org}
+                            onChange={(e) => setPollForm({ ...pollForm, external_officer_org: e.target.value })}
+                            className="w-full px-2 py-1 text-xs border border-gray-300 rounded-lg"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -1397,112 +1576,136 @@ export default function AdminVotingManage() {
           </div>
 
           {/* Target Audience / Voter Eligibility */}
-          <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-200 space-y-2">
-            <label className="block text-xs font-bold uppercase tracking-wider text-gray-700">
-              Voter Eligibility & Target Audience *
-            </label>
-            <div className="flex flex-wrap gap-4 text-xs font-medium text-gray-700">
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="radio"
-                  name="target_audience"
-                  checked={pollForm.target_audience === 'all'}
-                  onChange={() => setPollForm({ ...pollForm, target_audience: 'all' })}
-                  className="text-primary-600 focus:ring-primary-500"
-                />
-                <span>All Association Members</span>
-              </label>
-
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="radio"
-                  name="target_audience"
-                  checked={pollForm.target_audience === 'street'}
-                  onChange={() => setPollForm({ ...pollForm, target_audience: 'street' })}
-                  className="text-primary-600 focus:ring-primary-500"
-                />
-                <span>Specific Street / Block Members Only</span>
-              </label>
-
-              <label className="flex items-center gap-1.5 cursor-pointer">
-                <input
-                  type="radio"
-                  name="target_audience"
-                  checked={pollForm.target_audience === 'selected'}
-                  onChange={() => setPollForm({ ...pollForm, target_audience: 'selected' })}
-                  className="text-primary-600 focus:ring-primary-500"
-                />
-                <span>Designated Committee / Selected Members</span>
-              </label>
-            </div>
-
-            {pollForm.target_audience === 'street' && (
-              <div className="pt-2">
-                <label className="block text-[11px] font-bold text-gray-600 mb-1">
-                  Specify Target Street / Block Name (e.g. 1st Cross Street, Main Avenue):
+          {pollForm.poll_type === 'election' ? (
+            <div className="bg-amber-50/70 p-3.5 rounded-xl border border-amber-200 space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold uppercase tracking-wider text-amber-950">
+                  Voter Eligibility (This Association Only)
                 </label>
-                <input
-                  type="text"
-                  required
-                  placeholder="e.g. 1st Cross Street"
-                  value={pollForm.target_street}
-                  onChange={(e) => setPollForm({ ...pollForm, target_street: e.target.value })}
-                  className="w-full px-3 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
-                />
+                <span className="text-[10px] bg-amber-200 text-amber-950 font-extrabold px-2.5 py-0.5 rounded-full">
+                  Current Layout Only
+                </span>
               </div>
-            )}
+              <p className="text-xs font-bold text-gray-800">
+                ✓ All Approved Resident Members of This Layout ({associationMembers.length} Members)
+              </p>
+              <p className="text-[11px] text-gray-600">
+                Franchise is restricted strictly to approved residents of this community layout. External or other associations cannot view or vote.
+              </p>
+            </div>
+          ) : (
+            <div className="bg-gray-50 p-3.5 rounded-xl border border-gray-200 space-y-2">
+              <div className="flex items-center justify-between">
+                <label className="block text-xs font-bold uppercase tracking-wider text-gray-700">
+                  Voter Eligibility & Target Audience (This Layout Only) *
+                </label>
+                <span className="text-[10px] text-gray-500 font-semibold">
+                  Restricted to this layout
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-4 text-xs font-medium text-gray-700">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="target_audience"
+                    checked={pollForm.target_audience === 'all'}
+                    onChange={() => setPollForm({ ...pollForm, target_audience: 'all' })}
+                    className="text-primary-600 focus:ring-primary-500"
+                  />
+                  <span>All Residents of This Layout</span>
+                </label>
 
-            {pollForm.target_audience === 'selected' && (
-              <div className="pt-2 space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <label className="block text-[11px] font-bold text-gray-600">
-                    Select Committee Members Allowed to Vote:
-                  </label>
-                  <span className="text-[10px] text-primary-600 font-bold">
-                    {(pollForm.target_user_ids || []).length} selected
-                  </span>
-                </div>
-                <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1 bg-white">
-                  {associationMembers.length === 0 ? (
-                    <p className="text-xs text-gray-400 p-2">No approved members found in association.</p>
-                  ) : (
-                    associationMembers.map((m) => {
-                      const isChecked = (pollForm.target_user_ids || []).includes(m.id);
-                      return (
-                        <label
-                          key={m.id}
-                          className="flex items-center gap-2 p-1.5 hover:bg-gray-50 rounded cursor-pointer text-xs"
-                        >
-                          <input
-                            type="checkbox"
-                            checked={isChecked}
-                            onChange={(e) => {
-                              if (e.target.checked) {
-                                setPollForm({
-                                  ...pollForm,
-                                  target_user_ids: [...(pollForm.target_user_ids || []), m.id],
-                                });
-                              } else {
-                                setPollForm({
-                                  ...pollForm,
-                                  target_user_ids: (pollForm.target_user_ids || []).filter((id) => id !== m.id),
-                                });
-                              }
-                            }}
-                            className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
-                          />
-                          <span className="font-semibold text-gray-800">{m.name}</span>
-                          <span className="text-gray-400 text-[11px]">
-                            ({m.email} {m.door_number ? `• Door: ${m.door_number}` : ''})
-                          </span>
-                        </label>
-                      );
-                    })
-                  )}
-                </div>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="target_audience"
+                    checked={pollForm.target_audience === 'street'}
+                    onChange={() => setPollForm({ ...pollForm, target_audience: 'street' })}
+                    className="text-primary-600 focus:ring-primary-500"
+                  />
+                  <span>Specific Street / Block (This Layout Only)</span>
+                </label>
+
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="radio"
+                    name="target_audience"
+                    checked={pollForm.target_audience === 'selected'}
+                    onChange={() => setPollForm({ ...pollForm, target_audience: 'selected' })}
+                    className="text-primary-600 focus:ring-primary-500"
+                  />
+                  <span>Designated Committee / Selected Members</span>
+                </label>
               </div>
-            )}
-          </div>
+
+              {pollForm.target_audience === 'street' && (
+                <div className="pt-2">
+                  <label className="block text-[11px] font-bold text-gray-600 mb-1">
+                    Specify Target Street / Block Name (e.g. 1st Cross Street, Main Avenue):
+                  </label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. 1st Cross Street"
+                    value={pollForm.target_street}
+                    onChange={(e) => setPollForm({ ...pollForm, target_street: e.target.value })}
+                    className="w-full px-3 py-1.5 text-xs bg-white border border-gray-300 rounded-lg focus:ring-2 focus:ring-primary-500"
+                  />
+                </div>
+              )}
+
+              {pollForm.target_audience === 'selected' && (
+                <div className="pt-2 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="block text-[11px] font-bold text-gray-600">
+                      Select Committee Members Allowed to Vote:
+                    </label>
+                    <span className="text-[10px] text-primary-600 font-bold">
+                      {(pollForm.target_user_ids || []).length} selected
+                    </span>
+                  </div>
+                  <div className="max-h-40 overflow-y-auto border border-gray-200 rounded-lg p-2 space-y-1 bg-white">
+                    {associationMembers.length === 0 ? (
+                      <p className="text-xs text-gray-400 p-2">No approved members found in this layout.</p>
+                    ) : (
+                      associationMembers.map((m) => {
+                        const isChecked = (pollForm.target_user_ids || []).includes(m.id);
+                        return (
+                          <label
+                            key={m.id}
+                            className="flex items-center gap-2 p-1.5 hover:bg-gray-50 rounded cursor-pointer text-xs"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isChecked}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setPollForm({
+                                    ...pollForm,
+                                    target_user_ids: [...(pollForm.target_user_ids || []), m.id],
+                                  });
+                                } else {
+                                  setPollForm({
+                                    ...pollForm,
+                                    target_user_ids: (pollForm.target_user_ids || []).filter((id) => id !== m.id),
+                                  });
+                                }
+                              }}
+                              className="rounded border-gray-300 text-primary-600 focus:ring-primary-500"
+                            />
+                            <span className="font-semibold text-gray-800">{m.name}</span>
+                            <span className="text-gray-400 text-[11px]">
+                              ({m.email} {m.door_number ? `• Door: ${m.door_number}` : ''})
+                            </span>
+                          </label>
+                        );
+                      })
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Vendors Input (Only for Service Vendor Selection) */}
           {pollForm.poll_type === 'vendor_selection' ? (
@@ -1622,17 +1825,19 @@ export default function AdminVotingManage() {
                 >
                   <div className="flex items-center justify-between gap-2">
                     <div className="flex-1 flex items-center gap-2">
-                      <span className="w-6 h-6 rounded-full bg-amber-200 text-amber-900 text-xs font-bold flex items-center justify-center flex-shrink-0">
-                        {rIdx + 1}
+                      <span className="w-8 h-8 rounded-lg bg-amber-500 text-white text-xs font-black flex items-center justify-center flex-shrink-0">
+                        #{rIdx + 1}
                       </span>
                       <div className="flex-1">
                         <label className="block text-[10px] font-bold uppercase tracking-wider text-amber-900">
-                          Role / Designation Name * (Write manually)
+                          {pollForm.election_type === 'single_role'
+                            ? 'Single Role Post Name * (e.g. President)'
+                            : `Election Role #${rIdx + 1} Post Name * (e.g. President, Secretary, Treasurer)`}
                         </label>
                         <input
                           type="text"
                           required
-                          placeholder="e.g. President, Secretary, Treasurer, Vice President"
+                          placeholder="e.g. President"
                           value={roleObj.role_name}
                           onChange={(e) => handleRoleNameChange(rIdx, e.target.value)}
                           className="w-full px-2.5 py-1.5 text-xs bg-white font-bold text-gray-900 border border-amber-300 rounded-lg focus:ring-2 focus:ring-amber-500"
@@ -1655,8 +1860,8 @@ export default function AdminVotingManage() {
                   {/* Contesting Candidates under this role */}
                   <div className="space-y-2 pt-2 border-t border-amber-200/50">
                     <div className="flex items-center justify-between">
-                      <span className="text-[11px] font-bold text-gray-700">
-                        Candidates Standing for {roleObj.role_name || 'this role'} ({(roleObj.candidates || []).length})
+                      <span className="text-[11px] font-black text-amber-950 uppercase tracking-wide">
+                        🏛️ {roleObj.role_name ? `${roleObj.role_name} Election` : 'Role'} — Contesting Members ({(roleObj.candidates || []).length})
                       </span>
                       <button
                         type="button"
