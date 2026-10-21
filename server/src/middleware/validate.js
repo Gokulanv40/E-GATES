@@ -13,9 +13,16 @@ const validate = (req, res, next) => {
       value: err.value,
     }));
 
+    console.warn(`[Validation Failed] ${req.method} ${req.originalUrl}:`, JSON.stringify(errorDetails));
+
+    const combinedMsg = errorDetails
+      .map((e) => (e.field ? `${e.field}: ${e.message}` : e.message))
+      .filter(Boolean)
+      .join(', ');
+
     return res.status(400).json({
       success: false,
-      message: 'Validation failed. Please correct the specified fields.',
+      message: combinedMsg || 'Validation failed. Please correct the specified fields.',
       errors: errorDetails,
     });
   }

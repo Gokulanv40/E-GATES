@@ -79,7 +79,7 @@ router.get(
 
 /**
  * @route   POST /api/v1/voting/polls/:id/vote
- * @desc    Cast vote on a poll
+ * @desc    Cast vote on a poll (vendor poll, resolution, or election)
  * @access  Private (Member)
  */
 router.post(
@@ -87,7 +87,14 @@ router.post(
   authenticate,
   [
     param('id').isInt().withMessage('Poll ID must be an integer'),
-    body('vendor_id').isInt().withMessage('Vendor ID is required'),
+    body().custom((value, { req }) => {
+      const hasVendor = req.body.vendor_id !== undefined && req.body.vendor_id !== null && !isNaN(Number(req.body.vendor_id));
+      const hasCandidates = Array.isArray(req.body.candidate_ids) && req.body.candidate_ids.length > 0;
+      if (!hasVendor && !hasCandidates) {
+        throw new Error('Selection is required to cast vote (vendor_id or candidate_ids)');
+      }
+      return true;
+    }),
     validate
   ],
   votingController.castVote

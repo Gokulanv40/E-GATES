@@ -57,6 +57,17 @@ api.interceptors.response.use(
       );
     }
 
+    // Format detailed validation errors if returned from backend
+    if (error.response?.data?.errors && Array.isArray(error.response.data.errors) && error.response.data.errors.length > 0) {
+      const details = error.response.data.errors
+        .map((e) => (e.field ? `${e.field}: ${e.message || e.msg}` : (e.message || e.msg)))
+        .filter(Boolean)
+        .join('; ');
+      if (details) {
+        error.response.data.message = details;
+      }
+    }
+
     // Do not attempt refresh on auth endpoints themselves
     const isAuthRoute =
       originalRequest.url?.includes('/auth/login') ||
