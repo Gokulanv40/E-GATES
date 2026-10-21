@@ -640,13 +640,16 @@ const userController = {
         passwordHashToSave = await bcrypt.hash(password.trim(), salt);
       }
 
-      // Role change restriction: only super_admin can change user role
+      // Role change restriction: super_admin or Main Association Admin of the same association can change user role
       let roleToSave = existingUser.role;
       if (updatedRole && updatedRole !== existingUser.role) {
-        if (requesterRole !== 'super_admin') {
+        if (
+          requesterRole !== 'super_admin' &&
+          !(requesterRole === 'admin' && req.user.is_main_admin && existingUser.association_id === req.user.association_id)
+        ) {
           return res.status(403).json({
             success: false,
-            message: 'Only super admin can modify user roles'
+            message: 'Only super admin or Main Association Admin can modify user roles'
           });
         }
         roleToSave = updatedRole;
@@ -732,6 +735,208 @@ const userController = {
         success: true,
         message: 'User updated successfully',
         data: updatedUser
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * Change user role / designation
+   * Allows:
+   *  - Promoting an admin or resident member to Main Association Admin
+   *  - Changing Main Association Admin to Layout Admin or Resident Member
+   *  - Promoting Resident Member to Layout Admin
+   *  - Demoting Layout Admin to Resident Member
+   */
+  async changeRole(req, res, next) {
+    try {
+      const targetId = parseInt(req.params.id, 10);
+      const { new_role, previous_admin_role, new_main_admin_id } = req.body;
+      const { id: requesterId, role: requesterRole, is_main_admin: requesterIsMainAdmin, association_id: requesterAssocId } = req.user;
+
+      if (!['main_admin', 'admin', 'member'].includes(new_role)) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid role specified. Must be one of: main_admin, admin, member'
+        });
+      }
+
+      // Check target user
+      const userCheck = await pool.query(
+        'SELECT id, name, email, phone, role, is_main_admin, association_id, member_code, status FROM users WHERE id = $1',
+        [targetId]
+      );
+
+      if (userCheck.rows.length === 0) {
+        return res.status(404).json({
+          success: false,
+          message: 'Target user not found'
+        });
+      }
+
+      const targetUser = userCheck.rows[0];
+
+      // Disallow changing root super admin
+      if (
+        targetUser.role === 'super_admin' ||
+        targetUser.member_code === '#000001' ||
+        targetUser.email === 'superadmin@association.com'
+      ) {
+        return res.status(403).json({
+          success: false,
+          message: 'Root Super Administrator role cannot be modified'
+        });
+      }
+
+      // Authorization check
+      if (requesterRole === 'super_admin') {
+        // Super admin can change anyone except root super admin
+      } else if (requesterRole === 'admin') {
+        if (!requesterIsMainAdmin) {
+          return res.status(403).json({
+            success: false,
+            message: 'Permission denied. Only the Main Association Admin has authority to change user roles.'
+          });
+        }
+        if (targetUser.association_id !== requesterAssocId) {
+          return res.status(403).json({
+            success: false,
+            message: 'You can only manage users within your own layout association.'
+          });
+        }
+      } else {
+        return res.status(403).json({
+          success: false,
+          message: 'Unauthorized'
+        });
+      }
+
+      const targetAssocId = targetUser.association_id;
+      if (!targetAssocId) {
+        return res.status(400).json({
+          success: false,
+          message: 'User does not belong to any association'
+        });
+      }
+
+      let updatedTargetUser;
+
+      if (new_role === 'main_admin') {
+        // 1. If association had another main admin, demote them to previous_admin_role (default: admin)
+        const demoteRole = previous_admin_role === 'member' ? 'member' : 'admin';
+
+        await pool.query(
+          `UPDATE users
+           SET is_main_admin = false,
+               role = $1,
+               updated_at = NOW()
+           WHERE association_id = $2 AND id != $3 AND is_main_admin = true`,
+          [demoteRole, targetAssocId, targetId]
+        );
+
+        // 2. Promote target user to Main Association Admin
+        const targetRes = await pool.query(
+          `UPDATE users
+           SET role = 'admin',
+               is_main_admin = true,
+               updated_at = NOW()
+           WHERE id = $1
+           RETURNING id, name, email, phone, role, is_main_admin, association_id, member_code, status`,
+          [targetId]
+        );
+        updatedTargetUser = targetRes.rows[0];
+
+        // 3. Update association main_admin_id
+        await pool.query(
+          'UPDATE associations SET main_admin_id = $1, updated_at = NOW() WHERE id = $2',
+          [targetId, targetAssocId]
+        );
+      } else {
+        // Target is being set to 'admin' (Layout Admin) or 'member' (Resident Member)
+        const targetRole = new_role;
+
+        // If targetUser was the Main Admin:
+        if (targetUser.is_main_admin) {
+          // If a new_main_admin_id is provided, transfer Main Admin leadership to that user
+          if (new_main_admin_id && parseInt(new_main_admin_id, 10) !== targetId) {
+            const newAdminId = parseInt(new_main_admin_id, 10);
+            await pool.query(
+              `UPDATE users
+               SET role = 'admin',
+                   is_main_admin = true,
+                   updated_at = NOW()
+               WHERE id = $1 AND association_id = $2`,
+              [newAdminId, targetAssocId]
+            );
+            await pool.query(
+              'UPDATE associations SET main_admin_id = $1, updated_at = NOW() WHERE id = $2',
+              [newAdminId, targetAssocId]
+            );
+          } else {
+            // Find another active admin in the association to be main_admin, or clear
+            const altAdmin = await pool.query(
+              `SELECT id FROM users
+               WHERE association_id = $1 AND id != $2 AND role = 'admin' AND status = 'approved'
+               ORDER BY id ASC LIMIT 1`,
+              [targetAssocId, targetId]
+            );
+            if (altAdmin.rows.length > 0) {
+              const newAdminId = altAdmin.rows[0].id;
+              await pool.query(
+                `UPDATE users SET is_main_admin = true, updated_at = NOW() WHERE id = $1`,
+                [newAdminId]
+              );
+              await pool.query(
+                'UPDATE associations SET main_admin_id = $1, updated_at = NOW() WHERE id = $2',
+                [newAdminId, targetAssocId]
+              );
+            } else {
+              await pool.query(
+                'UPDATE associations SET main_admin_id = NULL, updated_at = NOW() WHERE id = $1',
+                [targetAssocId]
+              );
+            }
+          }
+        }
+
+        const targetRes = await pool.query(
+          `UPDATE users
+           SET role = $1,
+               is_main_admin = false,
+               updated_at = NOW()
+           WHERE id = $2
+           RETURNING id, name, email, phone, role, is_main_admin, association_id, member_code, status`,
+          [targetRole, targetId]
+        );
+        updatedTargetUser = targetRes.rows[0];
+      }
+
+      await logAudit(
+        requesterId,
+        'USER_ROLE_CHANGE',
+        'users',
+        targetId,
+        {
+          previous_role: targetUser.role,
+          previous_is_main_admin: targetUser.is_main_admin,
+          new_role: updatedTargetUser.role,
+          new_is_main_admin: updatedTargetUser.is_main_admin,
+          changedBy: requesterId
+        },
+        req.ip
+      );
+
+      res.json({
+        success: true,
+        message: `User role successfully updated to ${
+          updatedTargetUser.is_main_admin
+            ? 'Main Association Admin'
+            : updatedTargetUser.role === 'admin'
+            ? 'Layout Admin'
+            : 'Resident Member'
+        }`,
+        data: updatedTargetUser
       });
     } catch (error) {
       next(error);

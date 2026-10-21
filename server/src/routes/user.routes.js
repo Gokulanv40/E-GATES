@@ -178,6 +178,23 @@ router.get(
 );
 
 /**
+ * @route   PUT /api/v1/users/:id/change-role
+ * @desc    Change user role and leadership designation (main_admin, admin, member)
+ * @access  Private (Super Admin, Main Association Admin)
+ */
+router.put(
+  '/:id/change-role',
+  authenticate,
+  authorize('super_admin', 'admin'),
+  [
+    param('id').isInt().withMessage('User ID must be an integer'),
+    body('new_role').isIn(['main_admin', 'admin', 'member']).withMessage('Role must be main_admin, admin, or member'),
+    validate
+  ],
+  userController.changeRole
+);
+
+/**
  * @route   PUT /api/v1/users/:id
  * @desc    Update user profile
  * @access  Private (Self, Admin, SA)
