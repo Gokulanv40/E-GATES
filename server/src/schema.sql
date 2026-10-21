@@ -229,3 +229,22 @@ CREATE TABLE IF NOT EXISTS audit_log (
   ip_address VARCHAR(45),
   created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 16. Family Members & Household Directory
+CREATE TABLE IF NOT EXISTS family_members (
+  id SERIAL PRIMARY KEY,
+  user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  name VARCHAR(255) NOT NULL,
+  relation VARCHAR(100) NOT NULL,
+  dob DATE,
+  blood_group VARCHAR(10),
+  phone VARCHAR(20),
+  is_active BOOLEAN DEFAULT true,
+  removal_reason TEXT,
+  removed_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX IF NOT EXISTS idx_family_members_user ON family_members(user_id);
+

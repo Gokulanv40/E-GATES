@@ -22,6 +22,13 @@ import {
   HiArrowPath,
   HiCamera,
   HiPhoto,
+  HiUserGroup,
+  HiPlus,
+  HiTrash,
+  HiCalendar,
+  HiHeart,
+  HiExclamationTriangle,
+  HiArrowUturnLeft,
 } from 'react-icons/hi2';
 import toast from 'react-hot-toast';
 import { useAuth } from '../../hooks/useAuth';
@@ -96,6 +103,234 @@ export default function Profile() {
   });
 
   const [submitting, setSubmitting] = useState(false);
+
+  // Family Members Management State
+  const [familyMembers, setFamilyMembers] = useState([]);
+  const [loadingFamily, setLoadingFamily] = useState(false);
+  const [isAddFamilyOpen, setIsAddFamilyOpen] = useState(false);
+  const [editingFamily, setEditingFamily] = useState(null);
+  const [submittingFamily, setSubmittingFamily] = useState(false);
+  const [familyForm, setFamilyForm] = useState({
+    name: '',
+    relation: 'Spouse',
+    custom_relation: '',
+    dob: '',
+    blood_group: '',
+    phone: '',
+  });
+
+  // Family Removal State
+  const [removingFamily, setRemovingFamily] = useState(null);
+  const [removalReasonPreset, setRemovalReasonPreset] = useState('Relocated / Moved out');
+  const [removalReasonCustom, setRemovalReasonCustom] = useState('');
+  const [submittingRemoval, setSubmittingRemoval] = useState(false);
+  const [showRemovedHistory, setShowRemovedHistory] = useState(false);
+
+  const RELATION_PRESETS = [
+    'Spouse',
+    'Husband',
+    'Wife',
+    'Father',
+    'Mother',
+    'Son',
+    'Daughter',
+    'Brother',
+    'Sister',
+    'Father-in-law',
+    'Mother-in-law',
+    'Grandfather',
+    'Grandmother',
+    'Uncle',
+    'Aunt',
+    'Guardian',
+    'Other',
+  ];
+
+  const BLOOD_GROUP_OPTIONS = [
+    'A+',
+    'A-',
+    'B+',
+    'B-',
+    'AB+',
+    'AB-',
+    'O+',
+    'O-',
+    'Unknown',
+  ];
+
+  const REMOVAL_PRESETS = [
+    'Relocated / Moved out',
+    'Marriage',
+    'Deceased',
+    'Entered by mistake',
+    'Created independent member account',
+    'Other',
+  ];
+
+  const calculateAge = (dobString) => {
+    if (!dobString) return null;
+    const birthDate = new Date(dobString);
+    if (isNaN(birthDate.getTime())) return null;
+    const today = new Date();
+    let age = today.getFullYear() - birthDate.getFullYear();
+    const m = today.getMonth() - birthDate.getMonth();
+    if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+      age--;
+    }
+    return age >= 0 ? age : null;
+  };
+
+  const formatDob = (dobString) => {
+    if (!dobString) return null;
+    try {
+      const d = new Date(dobString);
+      if (isNaN(d.getTime())) return dobString;
+      return d.toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
+    } catch {
+      return dobString;
+    }
+  };
+
+  const fetchFamilyMembers = async () => {
+    if (!user?.id) return;
+    try {
+      setLoadingFamily(true);
+      const res = await api.get(`/users/${user.id}/family-members?include_removed=true`);
+      const list = res.data?.data || res.data || [];
+      setFamilyMembers(Array.isArray(list) ? list : []);
+    } catch (err) {
+      console.warn('Failed to load family members:', err);
+    } finally {
+      setLoadingFamily(false);
+    }
+  };
+
+  useEffect(() => {
+    if (user?.id) {
+      fetchFamilyMembers();
+    }
+  }, [user?.id]);
+
+  const handleOpenAddFamily = () => {
+    setEditingFamily(null);
+    setFamilyForm({
+      name: '',
+      relation: 'Spouse',
+      custom_relation: '',
+      dob: '',
+      blood_group: '',
+      phone: '',
+    });
+    setIsAddFamilyOpen(true);
+  };
+
+  const handleOpenEditFamily = (member) => {
+    setEditingFamily(member);
+    const isStandard = RELATION_PRESETS.includes(member.relation);
+    setFamilyForm({
+      name: member.name || '',
+      relation: isStandard ? member.relation : 'Other',
+      custom_relation: isStandard ? '' : member.relation || '',
+      dob: member.dob ? member.dob.substring(0, 10) : '',
+      blood_group: member.blood_group || '',
+      phone: member.phone || '',
+    });
+    setIsAddFamilyOpen(true);
+  };
+
+  const handleSaveFamily = async (e) => {
+    e.preventDefault();
+    if (!familyForm.name.trim()) {
+      toast.error('Please enter the family member name');
+      return;
+    }
+    const finalRelation =
+      familyForm.relation === 'Other'
+        ? familyForm.custom_relation.trim()
+        : familyForm.relation.trim();
+
+    if (!finalRelation) {
+      toast.error('Please specify the relationship');
+      return;
+    }
+
+    try {
+      setSubmittingFamily(true);
+      const payload = {
+        name: familyForm.name.trim(),
+        relation: finalRelation,
+        dob: familyForm.dob || null,
+        blood_group: familyForm.blood_group || null,
+        phone: familyForm.phone.trim() || null,
+      };
+
+      if (editingFamily) {
+        await api.put(`/users/${user.id}/family-members/${editingFamily.id}`, payload);
+        toast.success('Family member updated successfully!');
+      } else {
+        await api.post(`/users/${user.id}/family-members`, payload);
+        toast.success('Family member added successfully!');
+      }
+
+      setIsAddFamilyOpen(false);
+      setEditingFamily(null);
+      await fetchFamilyMembers();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to save family member');
+    } finally {
+      setSubmittingFamily(false);
+    }
+  };
+
+  const handleOpenRemoveFamily = (member) => {
+    setRemovingFamily(member);
+    setRemovalReasonPreset('Relocated / Moved out');
+    setRemovalReasonCustom('');
+  };
+
+  const handleConfirmRemoveFamily = async (e) => {
+    e.preventDefault();
+    if (!removingFamily) return;
+
+    let finalReason = '';
+    if (removalReasonPreset === 'Other') {
+      finalReason = removalReasonCustom.trim();
+    } else {
+      finalReason = removalReasonCustom.trim()
+        ? `${removalReasonPreset} - ${removalReasonCustom.trim()}`
+        : removalReasonPreset;
+    }
+
+    if (!finalReason) {
+      toast.error('Please provide a reason for removal');
+      return;
+    }
+
+    try {
+      setSubmittingRemoval(true);
+      await api.delete(`/users/${user.id}/family-members/${removingFamily.id}`, {
+        data: { removal_reason: finalReason },
+      });
+      toast.success(`${removingFamily.name} removed from active household directory.`);
+      setRemovingFamily(null);
+      await fetchFamilyMembers();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to remove family member');
+    } finally {
+      setSubmittingRemoval(false);
+    }
+  };
+
+  const handleRestoreFamily = async (member) => {
+    try {
+      await api.post(`/users/${user.id}/family-members/${member.id}/restore`);
+      toast.success(`${member.name} restored to active family list!`);
+      await fetchFamilyMembers();
+    } catch (err) {
+      toast.error(err.response?.data?.message || 'Failed to restore family member');
+    }
+  };
+
 
   // Helper to resolve static file paths to backend URL
   const resolveFileUrl = (filePath) => {
@@ -1155,6 +1390,238 @@ export default function Profile() {
       </div>
       )}
 
+      {/* Section 4: Family Members & Household Directory */}
+      <div className="bg-white rounded-2xl p-4 sm:p-6 border border-gray-100 shadow-sm space-y-4">
+        {/* Header */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 pb-3 border-b border-gray-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-9 h-9 rounded-xl bg-teal-100 text-teal-700 flex items-center justify-center flex-shrink-0">
+              <HiUserGroup className="w-5 h-5" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="text-sm sm:text-base font-bold text-gray-900 leading-tight">
+                  Family Members & Household Directory
+                </h2>
+                <span className="px-2 py-0.5 bg-teal-50 border border-teal-200 text-teal-700 text-[11px] font-bold rounded-full">
+                  {familyMembers.filter((m) => m.is_active).length} Active
+                </span>
+              </div>
+              <p className="text-xs text-gray-500 mt-0.5">
+                Maintain household records, emergency contacts, relationships, and blood groups.
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleOpenAddFamily}
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2 bg-teal-600 hover:bg-teal-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-xs transition flex-shrink-0"
+          >
+            <HiPlus className="w-4 h-4" />
+            <span>Add Family Member</span>
+          </button>
+        </div>
+
+        {/* Content */}
+        {loadingFamily ? (
+          <div className="py-8 flex items-center justify-center text-gray-400 gap-2">
+            <HiArrowPath className="w-5 h-5 animate-spin text-teal-600" />
+            <span className="text-xs font-medium">Loading family records...</span>
+          </div>
+        ) : familyMembers.filter((m) => m.is_active).length === 0 ? (
+          <div className="py-8 px-4 text-center rounded-2xl border-2 border-dashed border-gray-200 bg-gray-50/50 flex flex-col items-center justify-center">
+            <div className="w-12 h-12 rounded-2xl bg-teal-50 text-teal-600 flex items-center justify-center mb-3 shadow-xs">
+              <HiUserGroup className="w-6 h-6" />
+            </div>
+            <h4 className="text-xs sm:text-sm font-bold text-gray-800 mb-1">
+              No family members added yet
+            </h4>
+            <p className="text-[11px] sm:text-xs text-gray-500 max-w-md mb-4">
+              Add your spouse, children, parents, or other household members to keep your community directory up-to-date and enable emergency contact coordination.
+            </p>
+            <button
+              type="button"
+              onClick={handleOpenAddFamily}
+              className="inline-flex items-center gap-1.5 px-4 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl shadow-xs transition"
+            >
+              <HiPlus className="w-4 h-4" />
+              <span>Add First Family Member</span>
+            </button>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
+            {familyMembers
+              .filter((m) => m.is_active)
+              .map((member) => {
+                const age = calculateAge(member.dob);
+                return (
+                  <div
+                    key={member.id}
+                    className="p-4 rounded-2xl border border-gray-200/80 bg-gradient-to-br from-white to-gray-50/60 hover:border-teal-200 transition shadow-xs flex flex-col justify-between space-y-3"
+                  >
+                    {/* Top Row: Name, Relation, Actions */}
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="w-10 h-10 rounded-xl bg-teal-50 border border-teal-100 text-teal-700 font-extrabold text-sm flex items-center justify-center flex-shrink-0 shadow-xs">
+                          {member.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <h3 className="text-sm font-bold text-gray-900 truncate">
+                            {member.name}
+                          </h3>
+                          <span className="inline-block px-2 py-0.5 mt-0.5 bg-teal-50 border border-teal-200/80 text-teal-700 font-bold text-[10px] rounded-md uppercase tracking-wider">
+                            {member.relation}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Action buttons */}
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditFamily(member)}
+                          title="Edit Details"
+                          className="p-1.5 text-gray-500 hover:text-teal-600 hover:bg-teal-50 rounded-lg transition"
+                        >
+                          <HiPencilSquare className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleOpenRemoveFamily(member)}
+                          title="Remove Member"
+                          className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                        >
+                          <HiTrash className="w-4 h-4" />
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Metadata Grid */}
+                    <div className="grid grid-cols-2 gap-2 pt-2 border-t border-gray-100 text-xs">
+                      {/* DOB / Age */}
+                      <div className="p-2 bg-white rounded-xl border border-gray-100/90 flex flex-col">
+                        <span className="text-[10px] uppercase font-bold text-gray-400 flex items-center gap-1">
+                          <HiCalendar className="w-3.5 h-3.5 text-teal-500" />
+                          <span>DOB & Age</span>
+                        </span>
+                        <span className="font-semibold text-gray-800 text-xs mt-0.5 truncate">
+                          {member.dob ? (
+                            <>
+                              {formatDob(member.dob)}
+                              {age !== null && (
+                                <span className="text-gray-500 font-normal ml-1">
+                                  ({age} yrs)
+                                </span>
+                              )}
+                            </>
+                          ) : (
+                            <span className="text-gray-400 italic">Not set</span>
+                          )}
+                        </span>
+                      </div>
+
+                      {/* Blood Group */}
+                      <div className="p-2 bg-white rounded-xl border border-gray-100/90 flex flex-col">
+                        <span className="text-[10px] uppercase font-bold text-gray-400 flex items-center gap-1">
+                          <HiHeart className="w-3.5 h-3.5 text-rose-500" />
+                          <span>Blood Group</span>
+                        </span>
+                        <div className="mt-0.5">
+                          {member.blood_group ? (
+                            <span className="inline-flex items-center px-2 py-0.5 bg-rose-50 border border-rose-200 text-rose-700 font-extrabold text-xs rounded-md">
+                              {member.blood_group}
+                            </span>
+                          ) : (
+                            <span className="text-gray-400 italic text-xs">Not specified</span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Phone / Contact */}
+                      <div className="p-2 bg-white rounded-xl border border-gray-100/90 col-span-2 flex items-center justify-between text-xs">
+                        <span className="text-[10px] uppercase font-bold text-gray-400 flex items-center gap-1">
+                          <HiPhone className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>Contact / Mobile</span>
+                        </span>
+                        <span className="font-semibold text-gray-800">
+                          {member.phone || <span className="text-gray-400 italic">Not recorded</span>}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+          </div>
+        )}
+
+        {/* Removed Records Accordion / Toggle */}
+        {familyMembers.some((m) => !m.is_active) && (
+          <div className="pt-3 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={() => setShowRemovedHistory(!showRemovedHistory)}
+              className="inline-flex items-center gap-2 text-xs font-bold text-gray-600 hover:text-gray-900 transition"
+            >
+              <HiClock className="w-4 h-4 text-gray-400" />
+              <span>
+                {showRemovedHistory ? 'Hide' : 'View'} Removed Family Records (
+                {familyMembers.filter((m) => !m.is_active).length})
+              </span>
+            </button>
+
+            {showRemovedHistory && (
+              <div className="mt-3 space-y-2">
+                {familyMembers
+                  .filter((m) => !m.is_active)
+                  .map((removed) => (
+                    <div
+                      key={removed.id}
+                      className="p-3 bg-gray-50 rounded-xl border border-gray-200/70 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs"
+                    >
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <span className="font-bold text-gray-900 line-through">
+                            {removed.name}
+                          </span>
+                          <span className="px-1.5 py-0.5 bg-gray-200 text-gray-700 font-semibold text-[10px] rounded">
+                            {removed.relation}
+                          </span>
+                          {removed.blood_group && (
+                            <span className="px-1.5 py-0.5 bg-rose-50 text-rose-700 font-bold text-[10px] rounded">
+                              {removed.blood_group}
+                            </span>
+                          )}
+                        </div>
+                        <div className="text-[11px] text-gray-500 mt-1 flex flex-wrap items-center gap-2">
+                          <span className="font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                            Reason: {removed.removal_reason || 'Removed'}
+                          </span>
+                          {removed.removed_at && (
+                            <span className="text-gray-400">
+                              Removed on {formatDob(removed.removed_at)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRestoreFamily(removed)}
+                        className="inline-flex items-center justify-center gap-1 px-3 py-1.5 bg-white hover:bg-gray-100 border border-gray-200 text-teal-700 hover:text-teal-800 font-bold rounded-lg transition text-xs shadow-xs flex-shrink-0"
+                        title="Restore this family member back to active list"
+                      >
+                        <HiArrowUturnLeft className="w-3.5 h-3.5" />
+                        <span>Restore</span>
+                      </button>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {/* Modal: Edit Registration & Profile Details (MATCHING REGISTRATION LAYOUT) */}
       <Modal
         isOpen={isEditProfileOpen}
@@ -1835,6 +2302,239 @@ export default function Profile() {
             </button>
           </div>
         </form>
+      </Modal>
+
+      {/* Modal: Add or Edit Family Member */}
+      <Modal
+        isOpen={isAddFamilyOpen}
+        onClose={() => {
+          setIsAddFamilyOpen(false);
+          setEditingFamily(null);
+        }}
+        title={editingFamily ? 'Edit Family Member Details' : 'Add Family Member'}
+        size="md"
+      >
+        <form onSubmit={handleSaveFamily} className="space-y-4">
+          <p className="text-xs text-gray-500">
+            {editingFamily
+              ? 'Update details for this household family member.'
+              : 'Add a new family member residing at your plot/door number.'}
+          </p>
+
+          {/* Full Name */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">
+              Full Name *
+            </label>
+            <input
+              type="text"
+              required
+              value={familyForm.name}
+              onChange={(e) => setFamilyForm({ ...familyForm, name: e.target.value })}
+              placeholder="e.g. Priya Sundaram"
+              className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 text-gray-900"
+            />
+          </div>
+
+          {/* Relationship */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">
+              Relationship to Member *
+            </label>
+            <select
+              value={familyForm.relation}
+              onChange={(e) => setFamilyForm({ ...familyForm, relation: e.target.value })}
+              className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 text-gray-900"
+            >
+              {RELATION_PRESETS.map((rel) => (
+                <option key={rel} value={rel}>
+                  {rel}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          {familyForm.relation === 'Other' && (
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                Specify Relationship *
+              </label>
+              <input
+                type="text"
+                required
+                value={familyForm.custom_relation}
+                onChange={(e) => setFamilyForm({ ...familyForm, custom_relation: e.target.value })}
+                placeholder="e.g. Cousin, Nephew, Ward"
+                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 text-gray-900"
+              />
+            </div>
+          )}
+
+          {/* Date of Birth & Blood Group */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                Date of Birth (DOB)
+              </label>
+              <input
+                type="date"
+                max={new Date().toISOString().split('T')[0]}
+                value={familyForm.dob}
+                onChange={(e) => setFamilyForm({ ...familyForm, dob: e.target.value })}
+                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 text-gray-900"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-gray-700 mb-1">
+                Blood Group
+              </label>
+              <select
+                value={familyForm.blood_group}
+                onChange={(e) => setFamilyForm({ ...familyForm, blood_group: e.target.value })}
+                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 text-gray-900"
+              >
+                <option value="">Select Blood Group</option>
+                {BLOOD_GROUP_OPTIONS.map((bg) => (
+                  <option key={bg} value={bg}>
+                    {bg}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          {familyForm.dob && calculateAge(familyForm.dob) !== null && (
+            <div className="px-3 py-2 bg-teal-50 rounded-xl border border-teal-100 text-xs text-teal-800 font-medium flex items-center justify-between">
+              <span>Calculated Age:</span>
+              <span className="font-bold">{calculateAge(familyForm.dob)} Years old</span>
+            </div>
+          )}
+
+          {/* Contact / Phone */}
+          <div>
+            <label className="block text-xs font-bold text-gray-700 mb-1">
+              Contact / Mobile Number
+            </label>
+            <input
+              type="tel"
+              value={familyForm.phone}
+              onChange={(e) => setFamilyForm({ ...familyForm, phone: e.target.value })}
+              placeholder="e.g. 9876543210 (Optional)"
+              className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-teal-500 text-gray-900"
+            />
+          </div>
+
+          {/* Modal Actions */}
+          <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
+            <button
+              type="button"
+              onClick={() => {
+                setIsAddFamilyOpen(false);
+                setEditingFamily(null);
+              }}
+              className="px-4 py-2 border border-gray-200 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-100 transition"
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              disabled={submittingFamily}
+              className="px-5 py-2 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold rounded-xl transition shadow-xs disabled:opacity-50"
+            >
+              {submittingFamily
+                ? 'Saving...'
+                : editingFamily
+                ? 'Update Details'
+                : 'Add Family Member'}
+            </button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal: Remove Family Member with Reason */}
+      <Modal
+        isOpen={!!removingFamily}
+        onClose={() => setRemovingFamily(null)}
+        title="Remove Family Member"
+        size="md"
+      >
+        {removingFamily && (
+          <form onSubmit={handleConfirmRemoveFamily} className="space-y-4">
+            <div className="p-3.5 bg-rose-50 rounded-2xl border border-rose-200/80 flex items-start gap-3">
+              <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center flex-shrink-0 mt-0.5">
+                <HiExclamationTriangle className="w-5 h-5" />
+              </div>
+              <div className="text-xs text-rose-900">
+                <p className="font-bold">
+                  Are you sure you want to remove {removingFamily.name}?
+                </p>
+                <p className="mt-0.5 text-rose-700 leading-relaxed">
+                  Relationship: <span className="font-semibold">{removingFamily.relation}</span>.
+                  For auditing and association record keeping, a reason for removal is mandatory.
+                </p>
+              </div>
+            </div>
+
+            {/* Removal Reason Preset */}
+            <div>
+              <label className="block text-xs font-bold text-gray-800 mb-1">
+                Reason for Removal *
+              </label>
+              <select
+                required
+                value={removalReasonPreset}
+                onChange={(e) => setRemovalReasonPreset(e.target.value)}
+                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 text-gray-900"
+              >
+                {REMOVAL_PRESETS.map((reason) => (
+                  <option key={reason} value={reason}>
+                    {reason}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Custom or Additional Notes */}
+            <div>
+              <label className="block text-xs font-bold text-gray-800 mb-1">
+                {removalReasonPreset === 'Other'
+                  ? 'Please Specify Reason *'
+                  : 'Additional Notes / Explanation (Optional)'}
+              </label>
+              <textarea
+                rows={3}
+                required={removalReasonPreset === 'Other'}
+                value={removalReasonCustom}
+                onChange={(e) => setRemovalReasonCustom(e.target.value)}
+                placeholder={
+                  removalReasonPreset === 'Other'
+                    ? 'Enter the reason for removing this family member...'
+                    : 'Any additional notes for records...'
+                }
+                className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:bg-white focus:outline-none focus:ring-2 focus:ring-rose-500 text-gray-900"
+              />
+            </div>
+
+            {/* Actions */}
+            <div className="flex items-center justify-end gap-3 pt-3 border-t border-gray-100">
+              <button
+                type="button"
+                onClick={() => setRemovingFamily(null)}
+                className="px-4 py-2 border border-gray-200 text-gray-700 text-xs font-bold rounded-xl hover:bg-gray-100 transition"
+              >
+                Cancel
+              </button>
+              <button
+                type="submit"
+                disabled={submittingRemoval}
+                className="px-5 py-2 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition shadow-xs disabled:opacity-50"
+              >
+                {submittingRemoval ? 'Removing...' : 'Confirm Removal'}
+              </button>
+            </div>
+          </form>
+        )}
       </Modal>
     </div>
   );

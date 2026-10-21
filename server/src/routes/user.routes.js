@@ -166,6 +166,62 @@ router.get(
 );
 
 /**
+ * Family Member Routes
+ */
+router.get(
+  '/:id/family-members',
+  authenticate,
+  [param('id').isInt().withMessage('User ID must be an integer'), validate],
+  userController.getFamilyMembers
+);
+
+router.post(
+  '/:id/family-members',
+  authenticate,
+  [
+    param('id').isInt().withMessage('User ID must be an integer'),
+    body('name').trim().notEmpty().withMessage('Name is required'),
+    body('relation').trim().notEmpty().withMessage('Relation is required'),
+    validate
+  ],
+  userController.addFamilyMember
+);
+
+router.put(
+  '/:id/family-members/:familyId',
+  authenticate,
+  [
+    param('id').isInt().withMessage('User ID must be an integer'),
+    param('familyId').isInt().withMessage('Family member ID must be an integer'),
+    validate
+  ],
+  userController.updateFamilyMember
+);
+
+router.delete(
+  '/:id/family-members/:familyId',
+  authenticate,
+  [
+    param('id').isInt().withMessage('User ID must be an integer'),
+    param('familyId').isInt().withMessage('Family member ID must be an integer'),
+    body('removal_reason').trim().notEmpty().withMessage('Removal reason is mandatory'),
+    validate
+  ],
+  userController.removeFamilyMember
+);
+
+router.post(
+  '/:id/family-members/:familyId/restore',
+  authenticate,
+  [
+    param('id').isInt().withMessage('User ID must be an integer'),
+    param('familyId').isInt().withMessage('Family member ID must be an integer'),
+    validate
+  ],
+  userController.restoreFamilyMember
+);
+
+/**
  * @route   GET /api/v1/users/:id
  * @desc    Get user profile by ID
  * @access  Private (All authenticated users with isolation check)

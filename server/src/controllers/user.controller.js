@@ -1497,6 +1497,277 @@ const userController = {
     } catch (error) {
       next(error);
     }
+  },
+
+  /**
+   * Get family members of a user
+   */
+  async getFamilyMembers(req, res, next) {
+    try {
+      const targetId = parseInt(req.params.id, 10);
+      const { id: requesterId, role: requesterRole, association_id: requesterAssocId } = req.user;
+
+      const userCheck = await pool.query('SELECT id, association_id FROM users WHERE id = $1', [targetId]);
+      if (userCheck.rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      const targetUser = userCheck.rows[0];
+      if (requesterRole === 'member' && targetId !== requesterId) {
+        return res.status(403).json({ success: false, message: 'Unauthorized access to family members' });
+      }
+      if (requesterRole === 'admin' && targetUser.association_id !== requesterAssocId) {
+        return res.status(403).json({ success: false, message: 'Unauthorized access across associations' });
+      }
+
+      const includeRemoved = req.query.include_removed === 'true';
+      const query = includeRemoved
+        ? 'SELECT * FROM family_members WHERE user_id = $1 ORDER BY created_at ASC'
+        : 'SELECT * FROM family_members WHERE user_id = $1 AND is_active = true ORDER BY created_at ASC';
+
+      const result = await pool.query(query, [targetId]);
+      res.json({
+        success: true,
+        data: result.rows
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * Add a family member
+   */
+  async addFamilyMember(req, res, next) {
+    try {
+      const targetId = parseInt(req.params.id, 10);
+      const { id: requesterId, role: requesterRole, association_id: requesterAssocId } = req.user;
+
+      const userCheck = await pool.query('SELECT id, association_id FROM users WHERE id = $1', [targetId]);
+      if (userCheck.rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      const targetUser = userCheck.rows[0];
+      if (requesterRole === 'member' && targetId !== requesterId) {
+        return res.status(403).json({ success: false, message: 'Unauthorized to add family members for this user' });
+      }
+      if (requesterRole === 'admin' && targetUser.association_id !== requesterAssocId) {
+        return res.status(403).json({ success: false, message: 'Unauthorized access across associations' });
+      }
+
+      const { name, relation, dob, blood_group, phone } = req.body;
+      if (!name || !name.trim()) {
+        return res.status(400).json({ success: false, message: 'Family member name is required' });
+      }
+      if (!relation || !relation.trim()) {
+        return res.status(400).json({ success: false, message: 'Relationship is required' });
+      }
+
+      const insertResult = await pool.query(
+        `INSERT INTO family_members (user_id, name, relation, dob, blood_group, phone, is_active)
+         VALUES ($1, $2, $3, $4, $5, $6, true)
+         RETURNING *`,
+        [targetId, name.trim(), relation.trim(), dob || null, blood_group ? blood_group.trim() : null, phone ? phone.trim() : null]
+      );
+
+      await logAudit(
+        req.user.id,
+        'FAMILY_MEMBER_ADD',
+        'family_members',
+        insertResult.rows[0].id,
+        { userId: targetId, name: name.trim(), relation: relation.trim() },
+        req.ip
+      );
+
+      res.status(201).json({
+        success: true,
+        message: 'Family member added successfully',
+        data: insertResult.rows[0]
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * Update family member details
+   */
+  async updateFamilyMember(req, res, next) {
+    try {
+      const targetId = parseInt(req.params.id, 10);
+      const familyId = parseInt(req.params.familyId, 10);
+      const { id: requesterId, role: requesterRole, association_id: requesterAssocId } = req.user;
+
+      const userCheck = await pool.query('SELECT id, association_id FROM users WHERE id = $1', [targetId]);
+      if (userCheck.rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      const targetUser = userCheck.rows[0];
+      if (requesterRole === 'member' && targetId !== requesterId) {
+        return res.status(403).json({ success: false, message: 'Unauthorized to edit family members for this user' });
+      }
+      if (requesterRole === 'admin' && targetUser.association_id !== requesterAssocId) {
+        return res.status(403).json({ success: false, message: 'Unauthorized access across associations' });
+      }
+
+      const memberCheck = await pool.query('SELECT * FROM family_members WHERE id = $1 AND user_id = $2', [familyId, targetId]);
+      if (memberCheck.rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'Family member not found' });
+      }
+
+      const { name, relation, dob, blood_group, phone } = req.body;
+      if (name !== undefined && !name.trim()) {
+        return res.status(400).json({ success: false, message: 'Family member name cannot be empty' });
+      }
+      if (relation !== undefined && !relation.trim()) {
+        return res.status(400).json({ success: false, message: 'Relationship cannot be empty' });
+      }
+
+      const updateResult = await pool.query(
+        `UPDATE family_members
+         SET name = COALESCE($1, name),
+             relation = COALESCE($2, relation),
+             dob = $3,
+             blood_group = $4,
+             phone = $5,
+             updated_at = NOW()
+         WHERE id = $6 AND user_id = $7
+         RETURNING *`,
+        [
+          name !== undefined ? name.trim() : null,
+          relation !== undefined ? relation.trim() : null,
+          dob !== undefined ? (dob || null) : memberCheck.rows[0].dob,
+          blood_group !== undefined ? (blood_group ? blood_group.trim() : null) : memberCheck.rows[0].blood_group,
+          phone !== undefined ? (phone ? phone.trim() : null) : memberCheck.rows[0].phone,
+          familyId,
+          targetId
+        ]
+      );
+
+      await logAudit(
+        req.user.id,
+        'FAMILY_MEMBER_UPDATE',
+        'family_members',
+        familyId,
+        { userId: targetId, changes: req.body },
+        req.ip
+      );
+
+      res.json({
+        success: true,
+        message: 'Family member updated successfully',
+        data: updateResult.rows[0]
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * Remove a family member (soft delete with reason)
+   */
+  async removeFamilyMember(req, res, next) {
+    try {
+      const targetId = parseInt(req.params.id, 10);
+      const familyId = parseInt(req.params.familyId, 10);
+      const { id: requesterId, role: requesterRole, association_id: requesterAssocId } = req.user;
+
+      const userCheck = await pool.query('SELECT id, association_id FROM users WHERE id = $1', [targetId]);
+      if (userCheck.rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      const targetUser = userCheck.rows[0];
+      if (requesterRole === 'member' && targetId !== requesterId) {
+        return res.status(403).json({ success: false, message: 'Unauthorized to remove family members for this user' });
+      }
+      if (requesterRole === 'admin' && targetUser.association_id !== requesterAssocId) {
+        return res.status(403).json({ success: false, message: 'Unauthorized access across associations' });
+      }
+
+      const memberCheck = await pool.query('SELECT * FROM family_members WHERE id = $1 AND user_id = $2', [familyId, targetId]);
+      if (memberCheck.rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'Family member not found' });
+      }
+
+      const { removal_reason } = req.body;
+      if (!removal_reason || !removal_reason.trim()) {
+        return res.status(400).json({ success: false, message: 'Removal reason is mandatory' });
+      }
+
+      const removeResult = await pool.query(
+        `UPDATE family_members
+         SET is_active = false,
+             removal_reason = $1,
+             removed_at = NOW(),
+             updated_at = NOW()
+         WHERE id = $2 AND user_id = $3
+         RETURNING *`,
+        [removal_reason.trim(), familyId, targetId]
+      );
+
+      await logAudit(
+        req.user.id,
+        'FAMILY_MEMBER_REMOVE',
+        'family_members',
+        familyId,
+        { userId: targetId, removalReason: removal_reason.trim() },
+        req.ip
+      );
+
+      res.json({
+        success: true,
+        message: 'Family member removed successfully',
+        data: removeResult.rows[0]
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+
+  /**
+   * Restore a previously removed family member
+   */
+  async restoreFamilyMember(req, res, next) {
+    try {
+      const targetId = parseInt(req.params.id, 10);
+      const familyId = parseInt(req.params.familyId, 10);
+      const { id: requesterId, role: requesterRole, association_id: requesterAssocId } = req.user;
+
+      const userCheck = await pool.query('SELECT id, association_id FROM users WHERE id = $1', [targetId]);
+      if (userCheck.rows.length === 0) {
+        return res.status(404).json({ success: false, message: 'User not found' });
+      }
+
+      const targetUser = userCheck.rows[0];
+      if (requesterRole === 'member' && targetId !== requesterId) {
+        return res.status(403).json({ success: false, message: 'Unauthorized to restore family members for this user' });
+      }
+      if (requesterRole === 'admin' && targetUser.association_id !== requesterAssocId) {
+        return res.status(403).json({ success: false, message: 'Unauthorized access across associations' });
+      }
+
+      const restoreResult = await pool.query(
+        `UPDATE family_members
+         SET is_active = true,
+             removal_reason = NULL,
+             removed_at = NULL,
+             updated_at = NOW()
+         WHERE id = $1 AND user_id = $2
+         RETURNING *`,
+        [familyId, targetId]
+      );
+
+      res.json({
+        success: true,
+        message: 'Family member restored successfully',
+        data: restoreResult.rows[0]
+      });
+    } catch (error) {
+      next(error);
+    }
   }
 };
 
