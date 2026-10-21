@@ -126,7 +126,10 @@ export default function Register() {
   useEffect(() => {
     if (cameraModalOpen && cameraStream && videoRef.current) {
       videoRef.current.srcObject = cameraStream;
-      videoRef.current.play().catch((err) => console.warn('Camera play warning:', err));
+      videoRef.current.onloadedmetadata = () => {
+        videoRef.current.play().catch((err) => console.warn('Camera play warning:', err));
+      };
+      videoRef.current.play().catch(() => {});
     }
   }, [cameraModalOpen, cameraStream]);
 
@@ -155,6 +158,10 @@ export default function Register() {
         audio: false,
       });
       setCameraStream(stream);
+      if (videoRef.current) {
+        videoRef.current.srcObject = stream;
+        videoRef.current.play().catch(() => {});
+      }
     } catch (err) {
       console.warn('Camera stream error:', err);
       setCameraError(
@@ -173,16 +180,32 @@ export default function Register() {
     setCameraModalOpen(false);
   };
 
+  const handleRetake = () => {
+    setCapturedBlob(null);
+    setCapturedPreview(null);
+    if (videoRef.current) {
+      if (cameraStream && videoRef.current.srcObject !== cameraStream) {
+        videoRef.current.srcObject = cameraStream;
+      }
+      videoRef.current.play().catch(() => {});
+    }
+  };
+
   const handleCaptureSnapshot = () => {
     if (!videoRef.current) return;
     const video = videoRef.current;
-    const canvas = document.createElement('canvas');
     const vw = video.videoWidth || 640;
     const vh = video.videoHeight || 640;
+    if (vw === 0 || vh === 0) return;
+    const canvas = document.createElement('canvas');
     const size = Math.min(vw, vh);
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext('2d');
+
+    // Mirror snapshot to match live mirror view
+    ctx.translate(size, 0);
+    ctx.scale(-1, 1);
 
     // Center-crop to square portrait
     const sx = (vw - size) / 2;
@@ -1893,71 +1916,75 @@ export default function Register() {
                 Use Device Camera / File Picker
               </button>
             </div>
-          ) : capturedPreview ? (
-            <div className="space-y-3">
-              <div className="w-64 h-64 mx-auto rounded-3xl overflow-hidden ring-4 ring-primary-500 shadow-md">
-                <img
-                  src={capturedPreview}
-                  alt="Captured portrait"
-                  className="w-full h-full object-cover"
-                />
-              </div>
-              <p className="text-xs font-semibold text-gray-700">
-                Photo captured! Do you want to use this portrait photo?
-              </p>
-              <div className="flex items-center justify-center gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setCapturedBlob(null);
-                    setCapturedPreview(null);
-                  }}
-                  className="px-4 py-2 border border-gray-300 bg-white hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold transition"
-                >
-                  🔄 Retake
-                </button>
-                <button
-                  type="button"
-                  onClick={handleConfirmCapturedPhoto}
-                  className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-md"
-                >
-                  ✓ Use This Photo
-                </button>
-              </div>
-            </div>
           ) : (
-            <div className="space-y-3">
-              <div className="relative w-64 h-64 mx-auto rounded-3xl overflow-hidden bg-black ring-4 ring-gray-200 shadow-inner flex items-center justify-center">
-                <video
-                  ref={videoRef}
-                  autoPlay
-                  playsInline
-                  muted
-                  className="w-full h-full object-cover transform -scale-x-100"
-                />
-                <div className="absolute inset-0 border-2 border-white/40 rounded-3xl pointer-events-none flex items-center justify-center">
-                  <div className="w-48 h-48 border border-dashed border-white/60 rounded-full" />
+            <div>
+              {/* Snapshot Preview Mode */}
+              {capturedPreview && (
+                <div className="space-y-3">
+                  <div className="w-64 h-64 mx-auto rounded-3xl overflow-hidden ring-4 ring-emerald-500 shadow-md">
+                    <img
+                      src={capturedPreview}
+                      alt="Captured portrait"
+                      className="w-full h-full object-cover"
+                    />
+                  </div>
+                  <p className="text-xs font-semibold text-gray-700">
+                    Photo captured! Do you want to use this portrait photo?
+                  </p>
+                  <div className="flex items-center justify-center gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={handleRetake}
+                      className="px-4 py-2 border border-gray-300 bg-white hover:bg-gray-100 text-gray-700 rounded-xl text-xs font-bold transition shadow-xs flex items-center gap-1.5"
+                    >
+                      <span>🔄</span>
+                      <span>Retake Photo</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleConfirmCapturedPhoto}
+                      className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition shadow-md"
+                    >
+                      ✓ Use This Photo
+                    </button>
+                  </div>
                 </div>
-              </div>
-              <p className="text-xs text-gray-500">
-                Center your face in the circular guide and click <strong>Capture Photo</strong>.
-              </p>
-              <div className="flex items-center justify-center gap-3 pt-2">
-                <button
-                  type="button"
-                  onClick={triggerNativeCamera}
-                  className="px-3.5 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition"
-                >
-                  Use Device Camera App
-                </button>
-                <button
-                  type="button"
-                  onClick={handleCaptureSnapshot}
-                  className="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-xs font-bold transition shadow-md flex items-center gap-2"
-                >
-                  <HiCamera className="w-4 h-4" />
-                  <span>Capture Photo</span>
-                </button>
+              )}
+
+              {/* Live Webcam Stream (Kept mounted to preserve stream and avoid black frames) */}
+              <div className={capturedPreview ? 'hidden' : 'space-y-3'}>
+                <div className="relative w-64 h-64 mx-auto rounded-3xl overflow-hidden bg-black ring-4 ring-gray-200 shadow-inner flex items-center justify-center">
+                  <video
+                    ref={videoRef}
+                    autoPlay
+                    playsInline
+                    muted
+                    className="w-full h-full object-cover transform -scale-x-100"
+                  />
+                  <div className="absolute inset-0 border-2 border-white/40 rounded-3xl pointer-events-none flex items-center justify-center">
+                    <div className="w-48 h-48 border border-dashed border-white/60 rounded-full" />
+                  </div>
+                </div>
+                <p className="text-xs text-gray-500">
+                  Center your face in the circular guide and click <strong>Capture Photo</strong>.
+                </p>
+                <div className="flex items-center justify-center gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={triggerNativeCamera}
+                    className="px-3.5 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition"
+                  >
+                    Use Device Camera App
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCaptureSnapshot}
+                    className="px-6 py-2.5 bg-primary-600 hover:bg-primary-700 text-white rounded-xl text-xs font-bold transition shadow-md flex items-center gap-2"
+                  >
+                    <HiCamera className="w-4 h-4" />
+                    <span>Capture Photo</span>
+                  </button>
+                </div>
               </div>
             </div>
           )}
