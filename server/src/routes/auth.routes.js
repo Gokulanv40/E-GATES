@@ -14,7 +14,8 @@ const proofUploadMiddleware = (req, res, next) => {
   if (upload && upload.proofUpload && typeof upload.proofUpload.fields === 'function') {
     upload.proofUpload.fields([
       { name: 'eb_bill_proof', maxCount: 1 },
-      { name: 'property_tax_receipt', maxCount: 1 }
+      { name: 'property_tax_receipt', maxCount: 1 },
+      { name: 'profile_photo', maxCount: 1 }
     ])(req, res, (err) => {
       if (err) {
         return res.status(400).json({
@@ -49,13 +50,14 @@ router.post(
   authController.register
 );
 
-// Multer middleware wrapper for association + admin registration (logo + proofs)
+// Multer middleware wrapper for association + admin registration (logo + proofs + profile photo)
 const assocAdminUploadMiddleware = (req, res, next) => {
   if (upload && upload.uploadGeneric) {
     upload.uploadGeneric('documents', 5 * 1024 * 1024).fields([
       { name: 'logo', maxCount: 1 },
       { name: 'eb_bill_proof', maxCount: 1 },
-      { name: 'property_tax_receipt', maxCount: 1 }
+      { name: 'property_tax_receipt', maxCount: 1 },
+      { name: 'profile_photo', maxCount: 1 }
     ])(req, res, (err) => {
       if (err) {
         return res.status(400).json({

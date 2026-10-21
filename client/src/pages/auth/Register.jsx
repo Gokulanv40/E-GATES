@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   HiUser,
@@ -12,6 +12,7 @@ import {
   HiExclamationCircle,
   HiShieldCheck,
   HiPhoto,
+  HiCamera,
   HiArrowRight,
 } from 'react-icons/hi2';
 import { useAuth } from '../../hooks/useAuth';
@@ -60,6 +61,9 @@ export default function Register() {
   });
   const [memberEbProof, setMemberEbProof] = useState(null);
   const [memberTaxProof, setMemberTaxProof] = useState(null);
+  const [memberProfilePhoto, setMemberProfilePhoto] = useState(null);
+  const [memberPhotoPreview, setMemberPhotoPreview] = useState(null);
+  const memberPhotoInputRef = useRef(null);
 
   // 2. Admin Form State (for existing association)
   const [adminForm, setAdminForm] = useState({
@@ -78,6 +82,9 @@ export default function Register() {
   });
   const [adminEbProof, setAdminEbProof] = useState(null);
   const [adminTaxProof, setAdminTaxProof] = useState(null);
+  const [adminProfilePhoto, setAdminProfilePhoto] = useState(null);
+  const [adminPhotoPreview, setAdminPhotoPreview] = useState(null);
+  const adminPhotoInputRef = useRef(null);
 
   // 3. Association + Admin Form State (Combined new association creation)
   const [assocAdminForm, setAssocAdminForm] = useState({
@@ -98,6 +105,29 @@ export default function Register() {
   const [assocLogo, setAssocLogo] = useState(null);
   const [assocEbProof, setAssocEbProof] = useState(null);
   const [assocTaxProof, setAssocTaxProof] = useState(null);
+  const [assocAdminProfilePhoto, setAssocAdminProfilePhoto] = useState(null);
+  const [assocAdminPhotoPreview, setAssocAdminPhotoPreview] = useState(null);
+  const assocAdminPhotoInputRef = useRef(null);
+
+  // Handle Photo Selection with live preview
+  const handlePhotoSelect = (file, setPhoto, setPreview) => {
+    if (!file) return;
+    if (!file.type || !file.type.startsWith('image/')) {
+      setErrorMessage('Please select a valid image file (JPG, PNG, WebP).');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setErrorMessage('Profile photo size must be less than 5MB.');
+      return;
+    }
+    setErrorMessage('');
+    setPhoto(file);
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setPreview(reader.result);
+    };
+    reader.readAsDataURL(file);
+  };
 
   // Sync with URL query parameter
   useEffect(() => {
@@ -205,6 +235,9 @@ export default function Register() {
       if (memberTaxProof instanceof File) {
         data.append('property_tax_receipt', memberTaxProof);
       }
+      if (memberProfilePhoto instanceof File) {
+        data.append('profile_photo', memberProfilePhoto);
+      }
 
       await register(data);
       setSuccessData({
@@ -264,6 +297,9 @@ export default function Register() {
       }
       if (adminTaxProof instanceof File) {
         data.append('property_tax_receipt', adminTaxProof);
+      }
+      if (adminProfilePhoto instanceof File) {
+        data.append('profile_photo', adminProfilePhoto);
       }
 
       await register(data);
@@ -335,6 +371,9 @@ export default function Register() {
       }
       if (assocTaxProof instanceof File) {
         data.append('property_tax_receipt', assocTaxProof);
+      }
+      if (assocAdminProfilePhoto instanceof File) {
+        data.append('profile_photo', assocAdminProfilePhoto);
       }
 
       await registerAssociationAdmin(data);
@@ -618,6 +657,67 @@ export default function Register() {
                       <HiShieldCheck className="w-4 h-4 text-purple-600" />
                       2. Main Association Admin Details
                     </h3>
+
+                    {/* Profile Photo Upload */}
+                    <div className="p-4 bg-purple-50/50 rounded-2xl border border-purple-100 flex flex-col sm:flex-row items-center gap-4">
+                      <div className="w-18 h-18 rounded-2xl overflow-hidden bg-purple-100 text-purple-700 flex items-center justify-center font-bold text-xl ring-2 ring-purple-200 flex-shrink-0 shadow-xs">
+                        {assocAdminPhotoPreview ? (
+                          <img
+                            src={assocAdminPhotoPreview}
+                            alt="Profile Preview"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <HiCamera className="w-8 h-8 text-purple-500" />
+                        )}
+                      </div>
+                      <div className="flex-1 text-center sm:text-left">
+                        <label className="block text-xs font-bold text-gray-800 mb-0.5">
+                          Profile Photo (Optional)
+                        </label>
+                        <p className="text-[11px] text-gray-500 mb-2">
+                          Upload portrait profile photo for your Main Administrator account (PNG, JPG, Max 5MB).
+                        </p>
+                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                          <button
+                            type="button"
+                            onClick={() => assocAdminPhotoInputRef.current?.click()}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-purple-50 text-purple-800 border border-purple-200 text-xs font-semibold rounded-xl transition shadow-xs"
+                          >
+                            <HiPhoto className="w-4 h-4 text-purple-600" />
+                            <span>
+                              {assocAdminPhotoPreview ? 'Change Profile Photo' : 'Choose from Files / Update Photo'}
+                            </span>
+                          </button>
+                          {assocAdminPhotoPreview && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAssocAdminProfilePhoto(null);
+                                setAssocAdminPhotoPreview(null);
+                                if (assocAdminPhotoInputRef.current) assocAdminPhotoInputRef.current.value = '';
+                              }}
+                              className="text-xs text-rose-600 hover:text-rose-700 font-semibold px-2 py-1"
+                            >
+                              Remove Photo
+                            </button>
+                          )}
+                          <input
+                            ref={assocAdminPhotoInputRef}
+                            type="file"
+                            accept="image/png,image/jpeg,image/jpg,image/webp"
+                            onChange={(e) =>
+                              handlePhotoSelect(
+                                e.target.files?.[0],
+                                setAssocAdminProfilePhoto,
+                                setAssocAdminPhotoPreview
+                              )
+                            }
+                            className="hidden"
+                          />
+                        </div>
+                      </div>
+                    </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div>
@@ -917,6 +1017,67 @@ export default function Register() {
                       2. Administrator Personal Details
                     </h3>
 
+                    {/* Profile Photo Upload */}
+                    <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-100 flex flex-col sm:flex-row items-center gap-4">
+                      <div className="w-18 h-18 rounded-2xl overflow-hidden bg-blue-100 text-blue-700 flex items-center justify-center font-bold text-xl ring-2 ring-blue-200 flex-shrink-0 shadow-xs">
+                        {adminPhotoPreview ? (
+                          <img
+                            src={adminPhotoPreview}
+                            alt="Profile Preview"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <HiCamera className="w-8 h-8 text-blue-500" />
+                        )}
+                      </div>
+                      <div className="flex-1 text-center sm:text-left">
+                        <label className="block text-xs font-bold text-gray-800 mb-0.5">
+                          Profile Photo (Optional)
+                        </label>
+                        <p className="text-[11px] text-gray-500 mb-2">
+                          Upload portrait profile photo for your administrator account (PNG, JPG, Max 5MB).
+                        </p>
+                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                          <button
+                            type="button"
+                            onClick={() => adminPhotoInputRef.current?.click()}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-blue-50 text-blue-800 border border-blue-200 text-xs font-semibold rounded-xl transition shadow-xs"
+                          >
+                            <HiPhoto className="w-4 h-4 text-blue-600" />
+                            <span>
+                              {adminPhotoPreview ? 'Change Profile Photo' : 'Choose from Files / Update Photo'}
+                            </span>
+                          </button>
+                          {adminPhotoPreview && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setAdminProfilePhoto(null);
+                                setAdminPhotoPreview(null);
+                                if (adminPhotoInputRef.current) adminPhotoInputRef.current.value = '';
+                              }}
+                              className="text-xs text-rose-600 hover:text-rose-700 font-semibold px-2 py-1"
+                            >
+                              Remove Photo
+                            </button>
+                          )}
+                          <input
+                            ref={adminPhotoInputRef}
+                            type="file"
+                            accept="image/png,image/jpeg,image/jpg,image/webp"
+                            onChange={(e) =>
+                              handlePhotoSelect(
+                                e.target.files?.[0],
+                                setAdminProfilePhoto,
+                                setAdminPhotoPreview
+                              )
+                            }
+                            className="hidden"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div>
                         <label className="block text-xs font-semibold text-gray-700 mb-1">
@@ -1182,6 +1343,67 @@ export default function Register() {
                       <HiUser className="w-4 h-4 text-emerald-600" />
                       2. Resident Personal Details
                     </h3>
+
+                    {/* Profile Photo Upload */}
+                    <div className="p-4 bg-emerald-50/50 rounded-2xl border border-emerald-100 flex flex-col sm:flex-row items-center gap-4">
+                      <div className="w-18 h-18 rounded-2xl overflow-hidden bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xl ring-2 ring-emerald-200 flex-shrink-0 shadow-xs">
+                        {memberPhotoPreview ? (
+                          <img
+                            src={memberPhotoPreview}
+                            alt="Profile Preview"
+                            className="w-full h-full object-cover"
+                          />
+                        ) : (
+                          <HiCamera className="w-8 h-8 text-emerald-500" />
+                        )}
+                      </div>
+                      <div className="flex-1 text-center sm:text-left">
+                        <label className="block text-xs font-bold text-gray-800 mb-0.5">
+                          Profile Photo (Optional)
+                        </label>
+                        <p className="text-[11px] text-gray-500 mb-2">
+                          Upload portrait profile photo for your resident member account (PNG, JPG, Max 5MB).
+                        </p>
+                        <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                          <button
+                            type="button"
+                            onClick={() => memberPhotoInputRef.current?.click()}
+                            className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-emerald-50 text-emerald-800 border border-emerald-200 text-xs font-semibold rounded-xl transition shadow-xs"
+                          >
+                            <HiPhoto className="w-4 h-4 text-emerald-600" />
+                            <span>
+                              {memberPhotoPreview ? 'Change Profile Photo' : 'Choose from Files / Update Photo'}
+                            </span>
+                          </button>
+                          {memberPhotoPreview && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMemberProfilePhoto(null);
+                                setMemberPhotoPreview(null);
+                                if (memberPhotoInputRef.current) memberPhotoInputRef.current.value = '';
+                              }}
+                              className="text-xs text-rose-600 hover:text-rose-700 font-semibold px-2 py-1"
+                            >
+                              Remove Photo
+                            </button>
+                          )}
+                          <input
+                            ref={memberPhotoInputRef}
+                            type="file"
+                            accept="image/png,image/jpeg,image/jpg,image/webp"
+                            onChange={(e) =>
+                              handlePhotoSelect(
+                                e.target.files?.[0],
+                                setMemberProfilePhoto,
+                                setMemberPhotoPreview
+                              )
+                            }
+                            className="hidden"
+                          />
+                        </div>
+                      </div>
+                    </div>
 
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <div>

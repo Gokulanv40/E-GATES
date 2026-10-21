@@ -98,6 +98,10 @@ const authController = {
         ? req.files.property_tax_receipt[0].path.replace(/\\/g, '/')
         : null;
 
+      const profilePhoto = req.files && req.files.profile_photo && req.files.profile_photo[0]
+        ? req.files.profile_photo[0].path.replace(/\\/g, '/')
+        : null;
+
       // Hash password
       const passwordHash = await bcrypt.hash(password, 12);
 
@@ -106,12 +110,12 @@ const authController = {
         INSERT INTO users (
           name, email, phone, password_hash, role, association_id,
           door_no, street, layout_name, taluk, district, state,
-          eb_bill_proof, property_tax_receipt, status, language
+          eb_bill_proof, property_tax_receipt, status, language, profile_photo
         ) VALUES (
           $1, $2, $3, $4, $5, $6,
           $7, $8, $9, $10, $11, $12,
-          $13, $14, 'pending', $15
-        ) RETURNING id, name, email, phone, role, association_id, door_no, street, layout_name, status, created_at
+          $13, $14, 'pending', $15, $16
+        ) RETURNING id, name, email, phone, role, association_id, door_no, street, layout_name, status, profile_photo, created_at
       `;
 
       const values = [
@@ -129,7 +133,8 @@ const authController = {
         state ? state.trim() : null,
         ebBillProof,
         propertyTaxReceipt,
-        language
+        language,
+        profilePhoto
       ];
 
       const result = await pool.query(insertQuery, values);
@@ -279,6 +284,10 @@ const authController = {
         ? req.files.property_tax_receipt[0].path.replace(/\\/g, '/')
         : null;
 
+      const profilePhoto = req.files && req.files.profile_photo && req.files.profile_photo[0]
+        ? req.files.profile_photo[0].path.replace(/\\/g, '/')
+        : null;
+
       await client.query('BEGIN');
 
       // 1. Insert new association (inactive pending Super Admin approval)
@@ -298,12 +307,12 @@ const authController = {
         INSERT INTO users (
           name, email, phone, password_hash, role, is_main_admin, association_id,
           door_no, street, layout_name, taluk, district, state,
-          eb_bill_proof, property_tax_receipt, status, language
+          eb_bill_proof, property_tax_receipt, status, language, profile_photo
         ) VALUES (
           $1, $2, $3, $4, 'admin', true, $5,
           $6, $7, $8, $9, $10, $11,
-          $12, $13, 'pending', $14
-        ) RETURNING id, name, email, phone, role, is_main_admin, association_id, status, created_at
+          $12, $13, 'pending', $14, $15
+        ) RETURNING id, name, email, phone, role, is_main_admin, association_id, status, profile_photo, created_at
       `;
       const userRes = await client.query(insertUserQuery, [
         name.trim(),
@@ -319,7 +328,8 @@ const authController = {
         state ? state.trim() : 'Tamil Nadu',
         ebBillProof,
         propertyTaxReceipt,
-        language
+        language,
+        profilePhoto
       ]);
       const newAdmin = userRes.rows[0];
 
