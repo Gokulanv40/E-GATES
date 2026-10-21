@@ -257,114 +257,329 @@ export default function PollResults() {
         {loadingResults ? (
           <div className="p-8 text-center text-sm text-gray-500">Loading voting breakdown...</div>
         ) : pollResults ? (
-          <div className="space-y-4">
-            {/* Poll Status Overview */}
-            <div className="p-3.5 rounded-xl bg-purple-50 dark:bg-purple-950/40 border border-purple-100 dark:border-purple-900/40 flex items-center justify-between text-xs">
-              <div>
-                <span className="text-gray-500 dark:text-gray-400 block text-[10px] uppercase">
-                  Total Votes Cast
-                </span>
-                <span className="text-lg font-black text-purple-700 dark:text-purple-300">
-                  {pollResults.total_votes || 0} Votes
-                </span>
-              </div>
-              <span className="text-xs font-bold px-3 py-1 rounded-full bg-white dark:bg-slate-800 shadow-sm text-gray-700 dark:text-gray-200">
-                {pollResults.is_expired ? '🏁 Poll Concluded' : '⏳ Voting In Progress'}
-              </span>
-            </div>
+          (() => {
+            const isElection =
+              activePoll?.poll_type === 'election' || pollResults.poll?.poll_type === 'election';
 
-            {/* Winning Vendor Banner if Closed */}
-            {pollResults.winner && (
-              <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/40 flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/60 text-amber-600 dark:text-amber-300 flex items-center justify-center text-xl">
-                  <HiTrophy className="w-6 h-6" />
-                </div>
-                <div>
-                  <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400 block">
-                    Winning Vendor
+            // Group vendors/candidates by contesting role for election
+            const roleGroups = {};
+            if (isElection) {
+              (pollResults.vendors || []).forEach((v) => {
+                const rName = (v.contesting_role || v.company || 'Executive Committee Member').trim();
+                if (!roleGroups[rName]) roleGroups[rName] = [];
+                roleGroups[rName].push(v);
+              });
+            }
+
+            return (
+              <div className="space-y-4">
+                {/* Poll / Election Status Overview */}
+                <div
+                  className={`p-3.5 rounded-xl border flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs ${
+                    isElection
+                      ? 'bg-amber-50/70 dark:bg-amber-950/40 border-amber-200 dark:border-amber-800/50'
+                      : 'bg-purple-50 dark:bg-purple-950/40 border-purple-100 dark:border-purple-900/40'
+                  }`}
+                >
+                  <div>
+                    <span className="text-gray-500 dark:text-gray-400 block text-[10px] uppercase font-bold tracking-wider">
+                      {isElection ? 'Total Ballots Cast' : 'Total Votes Cast'}
+                    </span>
+                    <span
+                      className={`text-lg font-black ${
+                        isElection
+                          ? 'text-amber-800 dark:text-amber-300'
+                          : 'text-purple-700 dark:text-purple-300'
+                      }`}
+                    >
+                      {pollResults.total_votes || 0} Votes
+                    </span>
+                  </div>
+
+                  {isElection && (
+                    <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                      {pollResults.poll?.internal_officer_name && (
+                        <span className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800/60 font-semibold text-gray-700 dark:text-gray-200">
+                          👮 Internal Officer: <strong>{pollResults.poll.internal_officer_name}</strong>
+                        </span>
+                      )}
+                      {pollResults.poll?.external_officer_name && (
+                        <span className="px-2.5 py-1 rounded-lg bg-white dark:bg-slate-800 border border-amber-200 dark:border-amber-800/60 font-semibold text-gray-700 dark:text-gray-200">
+                          ⚖️ External Officer: <strong>{pollResults.poll.external_officer_name}</strong>
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <span className="text-xs font-bold px-3 py-1 rounded-full bg-white dark:bg-slate-800 shadow-sm text-gray-700 dark:text-gray-200 self-start sm:self-auto">
+                    {pollResults.is_expired || activePoll?.computed_status === 'closed' || activePoll?.status === 'closed'
+                      ? '🏁 Concluded'
+                      : '⏳ In Progress'}
                   </span>
-                  <p className="font-black text-gray-900 dark:text-white text-sm">
-                    {pollResults.winner.name} ({pollResults.winner.company || 'Service Provider'})
-                  </p>
-                  <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
-                    Quote: ₹{pollResults.winner.quotation_amount?.toLocaleString() || 'N/A'} • Received{' '}
-                    {pollResults.winner.vote_count} votes ({pollResults.winner.vote_percentage}%)
-                  </p>
                 </div>
-              </div>
-            )}
 
-            {/* Vendor Bars List */}
-            <div className="space-y-3">
-              <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
-                Vendor Quotations & Vote Distribution
-              </h4>
-
-              {pollResults.vendors?.map((vendor) => {
-                const isWinner = pollResults.winner?.id === vendor.id;
-                const percentage = parseFloat(vendor.vote_percentage || 0);
-
-                return (
-                  <div
-                    key={vendor.id}
-                    className={`p-3.5 rounded-xl border transition ${
-                      isWinner
-                        ? 'border-amber-400 dark:border-amber-600 bg-amber-50/20 dark:bg-amber-950/20'
-                        : 'border-gray-200 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-800/40'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between text-xs mb-1.5">
-                      <div className="flex items-center gap-2">
-                        <span className="font-bold text-gray-900 dark:text-white">
-                          {vendor.name}
-                        </span>
-                        {vendor.company && (
-                          <span className="text-[11px] text-gray-400">({vendor.company})</span>
-                        )}
-                        {isWinner && (
-                          <span className="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500 text-white">
-                            WINNER
-                          </span>
-                        )}
+                {/* ELECTION VIEW: Elected Leaders by Role Banner */}
+                {isElection && pollResults.role_winners && Object.keys(pollResults.role_winners).length > 0 && (
+                  <div className="p-4 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-sm space-y-2.5">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center text-lg">
+                        🏆
                       </div>
-
-                      <div className="text-right">
-                        <span className="font-mono font-bold text-gray-900 dark:text-white">
-                          ₹{vendor.quotation_amount?.toLocaleString() || 'N/A'}
+                      <div>
+                        <span className="text-[10px] font-extrabold uppercase tracking-wider text-amber-100 block">
+                          {pollResults.is_expired || activePoll?.status === 'closed'
+                            ? 'Official Elected Committee Leaders'
+                            : 'Current Leading Candidates by Role'}
                         </span>
-                        <span className="text-gray-500 dark:text-gray-400 text-[11px] block">
-                          {vendor.vote_count || 0} votes ({percentage}%)
-                        </span>
+                        <h4 className="text-sm font-black">Election Results Summary</h4>
                       </div>
                     </div>
 
-                    {/* Progress Bar */}
-                    <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
-                      <div
-                        className={`h-2.5 rounded-full transition-all duration-500 ${
-                          isWinner ? 'bg-amber-500' : 'bg-primary-600'
-                        }`}
-                        style={{ width: `${Math.max(percentage, 2)}%` }}
-                      />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
+                      {Object.entries(pollResults.role_winners).map(([rName, win]) => (
+                        <div
+                          key={rName}
+                          className="p-2.5 bg-white/10 backdrop-blur-xs rounded-lg border border-white/20 flex items-center justify-between"
+                        >
+                          <div>
+                            <span className="text-[10px] font-bold text-amber-100 block uppercase">
+                              🏛️ {rName}
+                            </span>
+                            <span className="font-extrabold text-xs text-white block">
+                              {win.name}
+                            </span>
+                            {win.contact && (
+                              <span className="text-[10px] text-amber-100 font-medium block">
+                                {win.contact}
+                              </span>
+                            )}
+                          </div>
+                          <span className="px-2 py-0.5 rounded-full text-[11px] font-bold bg-white text-amber-700 shadow-xs">
+                            {win.vote_count} votes
+                          </span>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                );
-              })}
-            </div>
+                )}
 
-            <div className="pt-3 border-t border-gray-100 dark:border-slate-800 flex justify-end">
-              <button
-                type="button"
-                onClick={() => {
-                  setActivePoll(null);
-                  setPollResults(null);
-                }}
-                className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition"
-              >
-                Close
-              </button>
-            </div>
-          </div>
+                {/* NON-ELECTION: Winning Vendor Banner */}
+                {!isElection && pollResults.winner && (
+                  <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/40 flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-100 dark:bg-amber-900/60 text-amber-600 dark:text-amber-300 flex items-center justify-center text-xl">
+                      <HiTrophy className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase font-bold text-amber-600 dark:text-amber-400 block">
+                        Winning Vendor
+                      </span>
+                      <p className="font-black text-gray-900 dark:text-white text-sm">
+                        {pollResults.winner.name} ({pollResults.winner.company || 'Service Provider'})
+                      </p>
+                      <p className="text-xs font-semibold text-amber-700 dark:text-amber-300">
+                        Quote: ₹{pollResults.winner.quotation_amount?.toLocaleString() || 'N/A'} • Received{' '}
+                        {pollResults.winner.vote_count} votes ({pollResults.winner.vote_percentage}%)
+                      </p>
+                    </div>
+                  </div>
+                )}
+
+                {/* ELECTION BREAKDOWN: Distinct Separate Sections for each Role */}
+                {isElection ? (
+                  <div className="space-y-4">
+                    <div className="flex items-center justify-between">
+                      <h4 className="text-xs font-extrabold text-gray-800 dark:text-gray-200 uppercase tracking-wider flex items-center gap-1.5">
+                        <span>🏛️</span> Contesting Roles & Candidate Vote Breakdown
+                      </h4>
+                      <span className="text-[11px] font-bold text-amber-700 dark:text-amber-400">
+                        {Object.keys(roleGroups).length} Roles
+                      </span>
+                    </div>
+
+                    {Object.entries(roleGroups).map(([roleName, candidates]) => {
+                      const roleTotalVotes = candidates.reduce(
+                        (sum, c) => sum + Number(c.vote_count || 0),
+                        0
+                      );
+
+                      return (
+                        <div
+                          key={roleName}
+                          className="p-4 bg-white dark:bg-slate-900 rounded-2xl border border-gray-200 dark:border-slate-800 shadow-xs space-y-3"
+                        >
+                          {/* Distinct Role Header */}
+                          <div className="flex items-center justify-between border-b border-gray-100 dark:border-slate-800 pb-2.5">
+                            <div className="flex items-center gap-2">
+                              <span className="w-7 h-7 rounded-lg bg-amber-100 dark:bg-amber-950/60 text-amber-700 dark:text-amber-400 flex items-center justify-center font-bold text-sm">
+                                🏛️
+                              </span>
+                              <div>
+                                <h5 className="text-sm font-black text-gray-900 dark:text-white uppercase tracking-wide">
+                                  {roleName} Election
+                                </h5>
+                                <p className="text-[11px] text-gray-500 dark:text-gray-400">
+                                  {candidates.length} candidate{candidates.length > 1 ? 's' : ''} contesting for {roleName}
+                                </p>
+                              </div>
+                            </div>
+                            <span className="text-xs font-bold text-amber-900 dark:text-amber-300 bg-amber-100 dark:bg-amber-900/50 px-2.5 py-1 rounded-full border border-amber-300 dark:border-amber-700">
+                              {roleTotalVotes} Role Votes
+                            </span>
+                          </div>
+
+                          {/* Candidate Cards Grid */}
+                          <div className="space-y-2.5">
+                            {candidates.map((cand) => {
+                              const vVotes = Number(cand.vote_count || 0);
+                              const pct =
+                                roleTotalVotes > 0 ? Math.round((vVotes / roleTotalVotes) * 100) : 0;
+                              const isTop =
+                                cand.is_role_winner ||
+                                (roleTotalVotes > 0 &&
+                                  vVotes ===
+                                    Math.max(...candidates.map((c) => Number(c.vote_count || 0))));
+
+                              return (
+                                <div
+                                  key={cand.id}
+                                  className={`p-3.5 rounded-xl border transition ${
+                                    isTop && vVotes > 0
+                                      ? 'border-amber-300 dark:border-amber-700 bg-amber-50/40 dark:bg-amber-950/20'
+                                      : 'border-gray-100 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-800/40'
+                                  }`}
+                                >
+                                  <div className="flex items-center justify-between text-xs mb-1.5">
+                                    <div>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-extrabold text-gray-900 dark:text-white text-sm">
+                                          {cand.name}
+                                        </span>
+                                        {isTop && vVotes > 0 && (
+                                          <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-amber-500 text-white flex items-center gap-1 shadow-xs">
+                                            <HiTrophy className="w-3 h-3" />
+                                            {pollResults.is_expired ||
+                                            activePoll?.status === 'closed'
+                                              ? 'Elected Winner'
+                                              : 'Leading'}
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {cand.contact && (
+                                        <span className="text-[11px] text-gray-500 dark:text-gray-400 block mt-0.5 font-medium">
+                                          📍 {cand.contact}
+                                        </span>
+                                      )}
+
+                                      {cand.notes && (
+                                        <p className="text-[11px] text-gray-600 dark:text-gray-300 italic mt-1 bg-white/70 dark:bg-slate-900/60 p-1.5 rounded border border-gray-100 dark:border-slate-800">
+                                          "{cand.notes}"
+                                        </p>
+                                      )}
+                                    </div>
+
+                                    <div className="text-right">
+                                      <span className="font-mono font-bold text-gray-900 dark:text-white text-sm">
+                                        {vVotes} votes
+                                      </span>
+                                      <span className="text-gray-500 dark:text-gray-400 text-[11px] block font-semibold">
+                                        {pct}% of {roleName}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  {/* Progress Bar */}
+                                  <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden mt-1.5">
+                                    <div
+                                      className={`h-2 rounded-full transition-all duration-500 ${
+                                        isTop && vVotes > 0 ? 'bg-amber-500' : 'bg-primary-600'
+                                      }`}
+                                      style={{ width: `${Math.max(pct, vVotes > 0 ? 5 : 0)}%` }}
+                                    />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : (
+                  /* NON-ELECTION: Vendor Quotations & Vote Distribution */
+                  <div className="space-y-3">
+                    <h4 className="text-xs font-bold text-gray-700 dark:text-gray-300 uppercase tracking-wider">
+                      Vendor Quotations & Vote Distribution
+                    </h4>
+
+                    {pollResults.vendors?.map((vendor) => {
+                      const isWinner = pollResults.winner?.id === vendor.id;
+                      const percentage = parseFloat(vendor.vote_percentage || 0);
+
+                      return (
+                        <div
+                          key={vendor.id}
+                          className={`p-3.5 rounded-xl border transition ${
+                            isWinner
+                              ? 'border-amber-400 dark:border-amber-600 bg-amber-50/20 dark:bg-amber-950/20'
+                              : 'border-gray-200 dark:border-slate-800 bg-gray-50/50 dark:bg-slate-800/40'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between text-xs mb-1.5">
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-gray-900 dark:text-white">
+                                {vendor.name}
+                              </span>
+                              {vendor.company && (
+                                <span className="text-[11px] text-gray-400">({vendor.company})</span>
+                              )}
+                              {isWinner && (
+                                <span className="px-2 py-0.5 rounded text-[10px] font-black bg-amber-500 text-white">
+                                  WINNER
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="text-right">
+                              <span className="font-mono font-bold text-gray-900 dark:text-white">
+                                ₹{vendor.quotation_amount?.toLocaleString() || 'N/A'}
+                              </span>
+                              <span className="text-gray-500 dark:text-gray-400 text-[11px] block">
+                                {vendor.vote_count || 0} votes ({percentage}%)
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Progress Bar */}
+                          <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2.5 overflow-hidden">
+                            <div
+                              className={`h-2.5 rounded-full transition-all duration-500 ${
+                                isWinner ? 'bg-amber-500' : 'bg-primary-600'
+                              }`}
+                              style={{ width: `${Math.max(percentage, 2)}%` }}
+                            />
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+
+                <div className="pt-3 border-t border-gray-100 dark:border-slate-800 flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActivePoll(null);
+                      setPollResults(null);
+                    }}
+                    className="px-4 py-2 rounded-xl text-xs font-semibold text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-slate-800 transition"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            );
+          })()
         ) : null}
       </Modal>
 

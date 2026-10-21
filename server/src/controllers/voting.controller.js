@@ -985,7 +985,7 @@ const votingController = {
       }
 
       const vendorsRes = await pool.query(
-        `SELECT v.id, v.name, v.company, v.quotation, COUNT(vt.id) as vote_count
+        `SELECT v.id, v.name, v.company, v.contesting_role, v.quotation, v.contact, v.notes, COUNT(vt.id) as vote_count
          FROM poll_vendors v
          LEFT JOIN votes vt ON vt.vendor_id = v.id
          WHERE v.poll_id = $1
@@ -997,18 +997,66 @@ const votingController = {
       const totalVotesRes = await pool.query('SELECT COUNT(*) FROM votes WHERE poll_id = $1', [pollId]);
       const totalVotes = parseInt(totalVotesRes.rows[0].count, 10);
 
+      const isElection = poll.poll_type === 'election';
+
+      // Calculate totals per role for elections
+      const roleTotals = {};
+      const roleWinners = {};
+
+      if (isElection) {
+        vendorsRes.rows.forEach((v) => {
+          const rName = (v.contesting_role || v.company || 'Executive Committee Member').trim();
+          const count = parseInt(v.vote_count, 10);
+          roleTotals[rName] = (roleTotals[rName] || 0) + count;
+        });
+
+        // Group by role to pick top candidate per role
+        const roleCandidates = {};
+        vendorsRes.rows.forEach((v) => {
+          const rName = (v.contesting_role || v.company || 'Executive Committee Member').trim();
+          if (!roleCandidates[rName]) roleCandidates[rName] = [];
+          roleCandidates[rName].push(v);
+        });
+
+        Object.entries(roleCandidates).forEach(([rName, cands]) => {
+          cands.sort((a, b) => parseInt(b.vote_count, 10) - parseInt(a.vote_count, 10));
+          const topCand = cands[0];
+          if (topCand && parseInt(topCand.vote_count, 10) > 0) {
+            roleWinners[rName] = {
+              id: topCand.id,
+              name: topCand.name,
+              role: rName,
+              vote_count: parseInt(topCand.vote_count, 10),
+              contact: topCand.contact,
+              notes: topCand.notes,
+            };
+          }
+        });
+      }
+
       let winner = null;
-      if (vendorsRes.rows.length > 0 && totalVotes > 0) {
+      if (!isElection && vendorsRes.rows.length > 0 && totalVotes > 0) {
         winner = vendorsRes.rows[0];
       }
 
-      const results = vendorsRes.rows.map(v => {
+      const results = vendorsRes.rows.map((v) => {
         const count = parseInt(v.vote_count, 10);
+        const rName = (v.contesting_role || v.company || 'Executive Committee Member').trim();
+        let pct = 0;
+        if (isElection) {
+          const roleTotal = roleTotals[rName] || 0;
+          pct = roleTotal > 0 ? Math.round((count / roleTotal) * 100) : 0;
+        } else {
+          pct = totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0;
+        }
+
         return {
           ...v,
+          contesting_role: rName,
           quotation: v.quotation ? parseFloat(v.quotation) : null,
           vote_count: count,
-          percentage: totalVotes > 0 ? Math.round((count / totalVotes) * 100) : 0
+          percentage: pct,
+          is_role_winner: Boolean(roleWinners[rName] && roleWinners[rName].id === v.id),
         };
       });
 
@@ -1017,9 +1065,12 @@ const votingController = {
         data: {
           poll,
           total_votes: totalVotes,
-          winner: winner ? { id: winner.id, name: winner.name, quotation: winner.quotation } : null,
-          vendors: results
-        }
+          winner: winner
+            ? { id: winner.id, name: winner.name, quotation: winner.quotation, company: winner.company }
+            : null,
+          role_winners: roleWinners,
+          vendors: results,
+        },
       });
     } catch (error) {
       next(error);
