@@ -74,6 +74,7 @@ export default function AdminVotingManage() {
   const [loading, setLoading] = useState(true);
   const [loadingDetail, setLoadingDetail] = useState(false);
   const [associationMembers, setAssociationMembers] = useState([]);
+  const [allApprovedUsers, setAllApprovedUsers] = useState([]);
 
   // Modals
   const [isCreatePollOpen, setIsCreatePollOpen] = useState(false);
@@ -193,7 +194,9 @@ export default function AdminVotingManage() {
   };
 
   const handleInternalOfficerSelect = (userId) => {
-    const member = associationMembers.find((m) => String(m.id) === String(userId));
+    const member = (allApprovedUsers.length > 0 ? allApprovedUsers : associationMembers).find(
+      (m) => String(m.id) === String(userId)
+    );
     if (member) {
       setPollForm((prev) => ({
         ...prev,
@@ -214,7 +217,9 @@ export default function AdminVotingManage() {
   };
 
   const handleExternalOfficerSelect = (userId) => {
-    const member = associationMembers.find((m) => String(m.id) === String(userId));
+    const member = (allApprovedUsers.length > 0 ? allApprovedUsers : associationMembers).find(
+      (m) => String(m.id) === String(userId)
+    );
     if (member) {
       setPollForm((prev) => ({
         ...prev,
@@ -223,7 +228,7 @@ export default function AdminVotingManage() {
         external_officer_contact: member.door_number
           ? `Door ${member.door_number}${member.phone ? `, Tel: ${member.phone}` : ''}`
           : member.phone || member.email || '',
-        external_officer_org: 'Resident Member / Returning Officer',
+        external_officer_org: member.role === 'admin' ? 'Layout Admin / Observer' : 'Resident Member / Returning Officer',
       }));
     } else {
       setPollForm((prev) => ({
@@ -266,8 +271,10 @@ export default function AdminVotingManage() {
 
       if (usersRes.status === 'fulfilled') {
         const rawUsers = usersRes.value.data?.data || usersRes.value.data || [];
-        const mems = Array.isArray(rawUsers) ? rawUsers.filter((u) => u.status === 'approved') : [];
-        setAssociationMembers(mems);
+        const allApproved = Array.isArray(rawUsers) ? rawUsers.filter((u) => u.status === 'approved') : [];
+        const residentMembersOnly = allApproved.filter((u) => u.role === 'member');
+        setAllApprovedUsers(allApproved);
+        setAssociationMembers(residentMembersOnly);
       }
 
       // Select targeted or first poll
@@ -1444,9 +1451,9 @@ export default function AdminVotingManage() {
                       required
                     >
                       <option value="">-- Choose Approved Member --</option>
-                      {associationMembers.map((m) => (
+                      {(allApprovedUsers.length > 0 ? allApprovedUsers : associationMembers).map((m) => (
                         <option key={m.id} value={m.id}>
-                          {m.name} {m.door_number ? `(Door ${m.door_number})` : ''} - {m.phone || m.email}
+                          {m.name} {m.door_number ? `(Door ${m.door_number})` : ''} - {m.role === 'admin' ? 'Layout Admin' : 'Resident Member'}
                         </option>
                       ))}
                     </select>
@@ -1490,13 +1497,13 @@ export default function AdminVotingManage() {
                           required={!pollForm.external_officer_is_manual}
                         >
                           <option value="">-- Choose Approved Member --</option>
-                          {associationMembers.map((m) => (
+                          {(allApprovedUsers.length > 0 ? allApprovedUsers : associationMembers).map((m) => (
                             <option
                               key={m.id}
                               value={m.id}
                               disabled={String(m.id) === String(pollForm.internal_officer_id)}
                             >
-                              {m.name} {m.door_number ? `(Door ${m.door_number})` : ''} - {m.phone || m.email}
+                              {m.name} {m.door_number ? `(Door ${m.door_number})` : ''} - {m.role === 'admin' ? 'Layout Admin' : 'Resident Member'}
                               {String(m.id) === String(pollForm.internal_officer_id) ? ' (Already Selected as Internal Officer)' : ''}
                             </option>
                           ))}

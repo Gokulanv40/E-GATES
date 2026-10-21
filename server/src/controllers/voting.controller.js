@@ -376,7 +376,7 @@ const votingController = {
 
       if (poll.target_audience === 'street' && poll.target_street) {
         const ecRes = await pool.query(
-          `SELECT COUNT(*) FROM users WHERE association_id = $1 AND status = 'approved' AND LOWER(TRIM(street)) = LOWER(TRIM($2))`,
+          `SELECT COUNT(*) FROM users WHERE association_id = $1 AND status = 'approved' AND role = 'member' AND LOWER(TRIM(street)) = LOWER(TRIM($2))`,
           [poll.association_id, poll.target_street]
         );
         eligibleVotersCount = parseInt(ecRes.rows[0]?.count || 0, 10);
@@ -397,14 +397,14 @@ const votingController = {
           }
         } else {
           const ecRes = await pool.query(
-            `SELECT COUNT(*) FROM users WHERE association_id = $1 AND status = 'approved'`,
+            `SELECT COUNT(*) FROM users WHERE association_id = $1 AND status = 'approved' AND role = 'member'`,
             [poll.association_id]
           );
           eligibleVotersCount = parseInt(ecRes.rows[0]?.count || 0, 10);
         }
       } else {
         const ecRes = await pool.query(
-          `SELECT COUNT(*) FROM users WHERE association_id = $1 AND status = 'approved'`,
+          `SELECT COUNT(*) FROM users WHERE association_id = $1 AND status = 'approved' AND role = 'member'`,
           [poll.association_id]
         );
         eligibleVotersCount = parseInt(ecRes.rows[0]?.count || 0, 10);
@@ -887,7 +887,7 @@ const votingController = {
       let eligibleCount = 0;
       if (poll.target_audience === 'street' && poll.target_street) {
         const ecRes = await pool.query(
-          `SELECT COUNT(*) FROM users WHERE association_id = $1 AND status = 'approved' AND LOWER(TRIM(street)) = LOWER(TRIM($2))`,
+          `SELECT COUNT(*) FROM users WHERE association_id = $1 AND status = 'approved' AND role = 'member' AND LOWER(TRIM(street)) = LOWER(TRIM($2))`,
           [poll.association_id, poll.target_street]
         );
         eligibleCount = parseInt(ecRes.rows[0]?.count || 0, 10);
@@ -899,7 +899,7 @@ const votingController = {
         eligibleCount = allowedIds.length > 0 ? allowedIds.length : 0;
       } else {
         const ecRes = await pool.query(
-          `SELECT COUNT(*) FROM users WHERE association_id = $1 AND status = 'approved'`,
+          `SELECT COUNT(*) FROM users WHERE association_id = $1 AND status = 'approved' AND role = 'member'`,
           [poll.association_id]
         );
         eligibleCount = parseInt(ecRes.rows[0]?.count || 0, 10);
