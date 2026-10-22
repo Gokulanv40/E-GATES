@@ -44,6 +44,8 @@ export default function Register() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [successData, setSuccessData] = useState(null);
   const [errorMessage, setErrorMessage] = useState('');
+  const [agreedToTerms, setAgreedToTerms] = useState(false);
+  const [termsModalOpen, setTermsModalOpen] = useState(false);
 
   // 1. Member Form State
   const [memberForm, setMemberForm] = useState({
@@ -345,6 +347,11 @@ export default function Register() {
     setErrorMessage('');
     setSuccessData(null);
 
+    if (!agreedToTerms) {
+      setErrorMessage('Please read and accept the Terms and Conditions to proceed with registration.');
+      return;
+    }
+
     if (memberForm.password !== memberForm.confirm_password) {
       setErrorMessage('Passwords do not match. Please re-enter.');
       return;
@@ -408,6 +415,11 @@ export default function Register() {
     setErrorMessage('');
     setSuccessData(null);
 
+    if (!agreedToTerms) {
+      setErrorMessage('Please read and accept the Terms and Conditions to proceed with registration.');
+      return;
+    }
+
     if (adminForm.password !== adminForm.confirm_password) {
       setErrorMessage('Passwords do not match. Please re-enter.');
       return;
@@ -470,6 +482,11 @@ export default function Register() {
     e.preventDefault();
     setErrorMessage('');
     setSuccessData(null);
+
+    if (!agreedToTerms) {
+      setErrorMessage('Please read and accept the Terms and Conditions to proceed with registration.');
+      return;
+    }
 
     if (!assocAdminForm.association_name.trim()) {
       setErrorMessage('Association name is required.');
@@ -1097,6 +1114,29 @@ export default function Register() {
                     </div>
                   </div>
 
+                  {/* Terms and Conditions Agreement */}
+                  <div className="bg-purple-50/50 border border-purple-200 rounded-2xl p-4">
+                    <label className="flex items-start gap-3 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={agreedToTerms}
+                        onChange={(e) => setAgreedToTerms(e.target.checked)}
+                        className="mt-1 w-4 h-4 text-purple-600 rounded border-gray-300 focus:ring-purple-500 cursor-pointer"
+                      />
+                      <span className="text-xs text-gray-700 leading-relaxed">
+                        I agree to the{' '}
+                        <button
+                          type="button"
+                          onClick={() => setTermsModalOpen(true)}
+                          className="font-bold text-purple-600 hover:text-purple-700 underline underline-offset-2"
+                        >
+                          EGATES Terms and Conditions
+                        </button>{' '}
+                        and acknowledge the Community Privacy and Verification Guidelines.
+                      </span>
+                    </label>
+                  </div>
+
                   {/* Submit Button */}
                   <div className="pt-4">
                     <button
@@ -1446,6 +1486,29 @@ export default function Register() {
                         />
                       </div>
                     </div>
+                  </div>
+
+                  {/* Terms and Conditions Agreement */}
+                  <div className="bg-blue-50/50 border border-blue-200 rounded-2xl p-4">
+                    <label className="flex items-start gap-3 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={agreedToTerms}
+                        onChange={(e) => setAgreedToTerms(e.target.checked)}
+                        className="mt-1 w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500 cursor-pointer"
+                      />
+                      <span className="text-xs text-gray-700 leading-relaxed">
+                        I agree to the{' '}
+                        <button
+                          type="button"
+                          onClick={() => setTermsModalOpen(true)}
+                          className="font-bold text-blue-600 hover:text-blue-700 underline underline-offset-2"
+                        >
+                          EGATES Terms and Conditions
+                        </button>{' '}
+                        and acknowledge the Community Privacy and Verification Guidelines.
+                      </span>
+                    </label>
                   </div>
 
                   {/* Submit Button */}
@@ -1855,6 +1918,29 @@ export default function Register() {
                     </div>
                   </div>
 
+                  {/* Terms and Conditions Agreement */}
+                  <div className="bg-emerald-50/50 border border-emerald-200 rounded-2xl p-4">
+                    <label className="flex items-start gap-3 cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={agreedToTerms}
+                        onChange={(e) => setAgreedToTerms(e.target.checked)}
+                        className="mt-1 w-4 h-4 text-emerald-600 rounded border-gray-300 focus:ring-emerald-500 cursor-pointer"
+                      />
+                      <span className="text-xs text-gray-700 leading-relaxed">
+                        I agree to the{' '}
+                        <button
+                          type="button"
+                          onClick={() => setTermsModalOpen(true)}
+                          className="font-bold text-emerald-600 hover:text-emerald-700 underline underline-offset-2"
+                        >
+                          EGATES Terms and Conditions
+                        </button>{' '}
+                        and acknowledge the Community Privacy and Verification Guidelines.
+                      </span>
+                    </label>
+                  </div>
+
                   {/* Submit Button */}
                   <div className="pt-4">
                     <button
@@ -1894,6 +1980,129 @@ export default function Register() {
           rights reserved.
         </p>
       </footer>
+
+      {/* TERMS AND CONDITIONS MODAL */}
+      <Modal
+        isOpen={termsModalOpen}
+        onClose={() => setTermsModalOpen(false)}
+        title="📜 EGATES Terms & Conditions"
+        size="lg"
+        footer={
+          <div className="flex flex-col sm:flex-row items-center justify-between gap-3 w-full">
+            <p className="text-xs text-gray-500 text-center sm:text-left">
+              By accepting, you agree to follow all EGATES community bylaws.
+            </p>
+            <div className="flex items-center gap-2 w-full sm:w-auto justify-end">
+              <button
+                type="button"
+                onClick={() => setTermsModalOpen(false)}
+                className="px-4 py-2 text-xs font-semibold text-gray-600 hover:bg-gray-100 rounded-xl transition"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setAgreedToTerms(true);
+                  setTermsModalOpen(false);
+                }}
+                className="px-5 py-2 text-xs font-bold text-white bg-primary-600 hover:bg-primary-700 rounded-xl shadow-md shadow-primary-600/30 transition flex items-center gap-1.5"
+              >
+                <HiCheckCircle className="w-4 h-4" />
+                <span>I Agree & Accept</span>
+              </button>
+            </div>
+          </div>
+        }
+      >
+        <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-2 text-gray-700 text-xs sm:text-sm leading-relaxed">
+          <div className="bg-primary-50 border border-primary-100 rounded-2xl p-4 flex items-start gap-3">
+            <HiShieldCheck className="w-6 h-6 text-primary-600 shrink-0 mt-0.5" />
+            <div>
+              <h4 className="font-bold text-primary-900 text-sm">
+                EGATES Community Association Platform
+              </h4>
+              <p className="text-xs text-primary-700 mt-1">
+                Please read these terms carefully before submitting your registration. EGATES is designed to provide secure, transparent, and seamless community living powered by Jishnu Infotech.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            <div className="border border-gray-100 rounded-2xl p-3.5 bg-gray-50/70">
+              <h5 className="font-bold text-gray-900 text-xs sm:text-sm flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-primary-100 text-primary-700 font-extrabold flex items-center justify-center text-[10px]">
+                  1
+                </span>
+                Account Eligibility & Accurate Information
+              </h5>
+              <p className="mt-1 text-xs text-gray-600 leading-normal pl-7">
+                You affirm that all details submitted (including full name, 10-digit mobile number, layout address, door/plot number, street, taluk, and district) are true, accurate, and represent your lawful property residency, ownership, or administrative mandate.
+              </p>
+            </div>
+
+            <div className="border border-gray-100 rounded-2xl p-3.5 bg-gray-50/70">
+              <h5 className="font-bold text-gray-900 text-xs sm:text-sm flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-primary-100 text-primary-700 font-extrabold flex items-center justify-center text-[10px]">
+                  2
+                </span>
+                Document Verification (EB Bill & Property Tax Receipts)
+              </h5>
+              <p className="mt-1 text-xs text-gray-600 leading-normal pl-7">
+                Uploaded verification documents (Electricity Bill, Property Tax receipt, or government ID) are processed exclusively for layout membership approval and address verification by authorized Association Admins and Super Admins. Falsified or tampered proofs will lead to permanent account rejection.
+              </p>
+            </div>
+
+            <div className="border border-gray-100 rounded-2xl p-3.5 bg-gray-50/70">
+              <h5 className="font-bold text-gray-900 text-xs sm:text-sm flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-primary-100 text-primary-700 font-extrabold flex items-center justify-center text-[10px]">
+                  3
+                </span>
+                Community Safety & Resident Guidelines
+              </h5>
+              <p className="mt-1 text-xs text-gray-600 leading-normal pl-7">
+                All registered members must maintain mutual dignity and cordiality in community notices, grievance submissions, visitor management logs, and discussion channels. Harassment, unauthorized promotional broadcasting, or defamatory conduct is strictly prohibited.
+              </p>
+            </div>
+
+            <div className="border border-gray-100 rounded-2xl p-3.5 bg-gray-50/70">
+              <h5 className="font-bold text-gray-900 text-xs sm:text-sm flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-primary-100 text-primary-700 font-extrabold flex items-center justify-center text-[10px]">
+                  4
+                </span>
+                Association Dues & Maintenance Payments
+              </h5>
+              <p className="mt-1 text-xs text-gray-600 leading-normal pl-7">
+                Layout maintenance collections, security fees, festival contributions, or amenities charges recorded on EGATES are subject to individual association bylaws and financial auditing.
+              </p>
+            </div>
+
+            <div className="border border-gray-100 rounded-2xl p-3.5 bg-gray-50/70">
+              <h5 className="font-bold text-gray-900 text-xs sm:text-sm flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-primary-100 text-primary-700 font-extrabold flex items-center justify-center text-[10px]">
+                  5
+                </span>
+                Privacy, Security & Data Protection
+              </h5>
+              <p className="mt-1 text-xs text-gray-600 leading-normal pl-7">
+                EGATES implements stringent encryption and role-based access control. Your personal contact details and private credentials will never be sold or shared with unauthorized commercial third parties. You are responsible for safeguarding your confidential password.
+              </p>
+            </div>
+
+            <div className="border border-gray-100 rounded-2xl p-3.5 bg-gray-50/70">
+              <h5 className="font-bold text-gray-900 text-xs sm:text-sm flex items-center gap-2">
+                <span className="w-5 h-5 rounded-full bg-primary-100 text-primary-700 font-extrabold flex items-center justify-center text-[10px]">
+                  6
+                </span>
+                Review, Approval & Termination Policy
+              </h5>
+              <p className="mt-1 text-xs text-gray-600 leading-normal pl-7">
+                All registrations are subject to formal administrative verification. The Association Administrators and Super Admin retain the right to suspend or terminate accounts in case of breach of these community terms.
+              </p>
+            </div>
+          </div>
+        </div>
+      </Modal>
 
       {/* CAMERA SNAPSHOT MODAL */}
       <Modal
