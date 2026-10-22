@@ -152,8 +152,13 @@ export default function DigitalIdCardModal({
       <div className="relative w-full max-w-md bg-gray-900/90 rounded-3xl shadow-2xl border border-gray-700/60 overflow-hidden my-auto flex flex-col max-h-[95vh]">
         {/* Top Floating Control Bar */}
         <div className="p-3.5 sm:px-6 bg-gray-900 border-b border-gray-800 flex items-center justify-between gap-2">
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse" />
+          <div className="flex items-center gap-2.5">
+            <img
+              src="/egates-logo.png"
+              alt="EGATES"
+              className="h-6 w-auto object-contain rounded-lg bg-white/95 px-1.5 py-0.5 shadow-sm"
+            />
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
             <span className="text-xs font-bold uppercase tracking-wider text-gray-200">
               Digital Identity Pass
             </span>
@@ -186,35 +191,40 @@ export default function DigitalIdCardModal({
           <div className="w-full max-w-[370px] rounded-3xl overflow-hidden shadow-2xl border border-gray-200 bg-white text-gray-900 transition-all duration-300 relative">
             {/* Header Band */}
             <div
-              className={`bg-gradient-to-r ${roleTheme.cardHeader} text-white p-4 pt-5 pb-4 relative overflow-hidden text-center`}
+              className={`bg-gradient-to-r ${roleTheme.cardHeader} text-white p-4 pt-4 pb-3.5 relative overflow-hidden text-center`}
             >
               {/* Subtle Security Guilloche Pattern overlay */}
               <div className="absolute inset-0 opacity-10 bg-[radial-gradient(#fff_1px,transparent_1px)] [background-size:8px_8px] pointer-events-none" />
 
-              {/* Association Name */}
-              <div className="relative z-10 px-6">
-                <p className="text-[10px] tracking-widest uppercase font-extrabold text-amber-400">
-                  EGATES • RESIDENTS WELFARE ASSOCIATION
-                </p>
-                <h2 className="text-sm sm:text-base font-black tracking-tight mt-0.5 line-clamp-1 drop-shadow-sm">
+              {/* Top row: Official EGATES Logo on left, Verified badge on right */}
+              <div className="relative z-10 flex items-center justify-between gap-2 mb-2 pb-2 border-b border-white/15">
+                <div className="flex items-center gap-2">
+                  <div className="bg-white/95 rounded-xl px-2 py-1 shadow-md border border-white/40 flex items-center justify-center">
+                    <img
+                      src="/egates-logo.png"
+                      alt="EGATES"
+                      className="h-6 sm:h-7 w-auto object-contain max-w-[85px]"
+                    />
+                  </div>
+                  <span className="text-[10px] tracking-wider uppercase font-black text-amber-300 drop-shadow-xs">
+                    EGATES PASS
+                  </span>
+                </div>
+
+                <div className="px-2.5 py-0.5 bg-white/15 backdrop-blur-md rounded-full border border-white/25 text-[9px] font-extrabold text-amber-300 flex items-center gap-1 shadow-xs">
+                  <HiShieldCheck className="w-3.5 h-3.5 text-amber-300" />
+                  <span>VERIFIED</span>
+                </div>
+              </div>
+
+              {/* Association Title & Subtitle */}
+              <div className="relative z-10 px-2">
+                <h2 className="text-sm sm:text-base font-black tracking-tight line-clamp-1 drop-shadow-sm text-white">
                   {currentAssocName}
                 </h2>
                 <p className="text-[9px] uppercase tracking-wider text-gray-300 font-semibold mt-0.5">
                   OFFICIAL DIGITAL IDENTITY PASS
                 </p>
-              </div>
-
-              {/* Hologram / Smart Chip Simulation */}
-              <div className="absolute top-3 left-3 w-8 h-6 bg-gradient-to-tr from-amber-200 via-amber-400 to-yellow-500 rounded-md border border-amber-300 shadow-xs flex items-center justify-center opacity-85">
-                <div className="w-4 h-3 border border-amber-800/40 rounded-xs flex flex-col justify-between p-0.5">
-                  <div className="w-full h-0.5 bg-amber-800/40" />
-                  <div className="w-full h-0.5 bg-amber-800/40" />
-                </div>
-              </div>
-
-              <div className="absolute top-3 right-3 px-2 py-0.5 bg-white/10 backdrop-blur-md rounded-full border border-white/20 text-[9px] font-bold text-amber-300 flex items-center gap-1">
-                <HiShieldCheck className="w-3 h-3 text-amber-300" />
-                <span>VERIFIED</span>
               </div>
             </div>
 
@@ -323,6 +333,19 @@ export default function DigitalIdCardModal({
                     </span>
                   </div>
                 )}
+              </div>
+
+              {/* Card Bottom Branding & Powered By */}
+              <div className="w-full mt-3 pt-2.5 border-t border-gray-100 flex items-center justify-between text-[10px]">
+                <div className="flex items-center gap-1.5">
+                  <img
+                    src="/egates-logo.png"
+                    alt="EGATES"
+                    className="h-4 w-auto object-contain"
+                  />
+                  <span className="font-bold text-gray-700">EGATES Pass</span>
+                </div>
+                <span className="font-medium text-gray-500">Powered by Jishnu Infotech</span>
               </div>
             </div>
           </div>
