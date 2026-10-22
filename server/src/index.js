@@ -91,6 +91,27 @@ app.use('/api/*', (req, res) => {
   });
 });
 
+// Serve frontend build if available (production / Docker)
+const fs = require('fs');
+const clientBuildPath = path.resolve(__dirname, '../../client/dist');
+if (fs.existsSync(clientBuildPath)) {
+  app.use(express.static(clientBuildPath));
+  app.get('*', (req, res, next) => {
+    if (
+      req.path.startsWith('/api') ||
+      req.path.startsWith('/uploads') ||
+      req.path.startsWith('/health')
+    ) {
+      return next();
+    }
+    const indexHtml = path.join(clientBuildPath, 'index.html');
+    if (fs.existsSync(indexHtml)) {
+      return res.sendFile(indexHtml);
+    }
+    next();
+  });
+}
+
 // Central Error Handling Middleware (must be registered last)
 app.use(errorHandler);
 
