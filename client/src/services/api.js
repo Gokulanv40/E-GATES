@@ -60,7 +60,8 @@ api.interceptors.response.use(
     // If no response (network error / server down), try direct backend port fallback
     if (!error.response && originalRequest && !originalRequest._fallbackTried) {
       originalRequest._fallbackTried = true;
-      const directBase = 'http://localhost:5002/api/v1';
+      const origin = typeof window !== 'undefined' && window.location.origin ? window.location.origin : 'http://localhost:5002';
+      const directBase = `${origin}/api/v1`;
       if (originalRequest.baseURL !== directBase) {
         originalRequest.baseURL = directBase;
         return api(originalRequest);
@@ -156,5 +157,20 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
+
+export const getFileUrl = (filePath) => {
+  if (!filePath) return '';
+  if (filePath.startsWith('http://') || filePath.startsWith('https://')) return filePath;
+  const origin = typeof window !== 'undefined' && window.location.origin ? window.location.origin : '';
+  const normalized = filePath.replace(/\\/g, '/');
+  const uploadIndex = normalized.indexOf('/uploads/');
+  if (uploadIndex !== -1) {
+    return `${origin}${normalized.substring(uploadIndex)}`;
+  }
+  if (normalized.startsWith('uploads/')) {
+    return `${origin}/${normalized}`;
+  }
+  return `${origin}/${normalized.replace(/^\/?/, '')}`;
+};
 
 export default api;

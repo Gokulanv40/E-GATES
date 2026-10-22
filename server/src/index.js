@@ -58,32 +58,14 @@ if (!fs.existsSync(uploadsPath)) {
 }
 app.use('/uploads', express.static(uploadsPath));
 
-// Health Check Endpoint
-app.get('/health', (req, res) => {
-  res.json({
-    success: true,
+// Universal Health Check endpoints (for Easypanel, Traefik, Docker Swarm, Kubernetes)
+app.get(['/health', '/healthz', '/ping', '/api/health', '/api/v1/health'], (req, res) => {
+  res.status(200).json({
     status: 'healthy',
     timestamp: new Date().toISOString(),
-    service: 'Layout Association Management System',
-    footer: 'Powered by JishnuInfotech',
-  });
-});
-
-app.get('/api/v1/health', async (req, res) => {
-  let dbStatus = 'disconnected';
-  try {
-    const result = await pool.query('SELECT 1');
-    if (result.rows.length > 0) dbStatus = 'connected';
-  } catch (err) {
-    dbStatus = `error: ${err.message}`;
-  }
-
-  res.json({
-    success: true,
-    status: 'healthy',
-    database: dbStatus,
-    timestamp: new Date().toISOString(),
-    service: 'Layout Association Management System API v1',
+    service: 'EGATES Platform',
+    host: req.hostname,
+    port: config.port,
     footer: 'Powered by JishnuInfotech',
   });
 });
@@ -96,17 +78,6 @@ app.use('/api/*', (req, res) => {
   res.status(404).json({
     success: false,
     message: `API endpoint not found: ${req.method} ${req.originalUrl}`,
-  });
-});
-
-// Universal Health Check endpoints (for Easypanel, Traefik, Docker Swarm, Kubernetes)
-app.get(['/health', '/healthz', '/ping', '/api/health'], (req, res) => {
-  res.status(200).json({
-    status: 'healthy',
-    timestamp: new Date().toISOString(),
-    service: 'EGATES Platform',
-    port: config.port,
-    footer: 'Powered by JishnuInfotech',
   });
 });
 

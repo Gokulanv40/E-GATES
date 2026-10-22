@@ -8,8 +8,8 @@ const config = {
   port: parseInt(process.env.PORT, 10) || 5002,
   nodeEnv: process.env.NODE_ENV || 'production',
   isDev: (process.env.NODE_ENV || 'development') === 'development',
-  clientUrl: process.env.CLIENT_URL || process.env.APP_BASE_URL || 'http://localhost:5173',
-  appBaseUrl: process.env.APP_BASE_URL || process.env.CLIENT_URL || 'http://localhost:5173',
+  clientUrl: process.env.CLIENT_URL || process.env.APP_BASE_URL || 'http://129.121.128.205:3001',
+  appBaseUrl: process.env.APP_BASE_URL || process.env.CLIENT_URL || 'http://129.121.128.205:3001',
   attachmentsPath: process.env.ATTACHMENTS_PATH || process.env.UPLOADS_PATH || path.resolve(__dirname, '../../uploads'),
 
   // Seed super admin credentials
