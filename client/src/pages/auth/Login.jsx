@@ -11,7 +11,6 @@ import {
   HiUserGroup,
   HiArrowRight,
   HiCheckCircle,
-  HiSparkles,
 } from 'react-icons/hi2';
 import { useAuth } from '../../hooks/useAuth';
 import { useLanguage } from '../../context/LanguageContext';
@@ -217,16 +216,9 @@ export default function Login() {
       {/* Main Login Experience */}
       <div className="relative z-10 w-full max-w-6xl mx-auto my-6 grid lg:grid-cols-[1.05fr_0.95fr] gap-8 items-center">
         <div className="hidden lg:block px-4 xl:px-12 text-white">
-          <div className="inline-flex items-center gap-2 rounded-full border border-blue-400/20 bg-blue-400/10 px-3 py-1.5 text-xs font-bold text-blue-200">
-            <HiSparkles className="h-4 w-4" />
-            Built for better communities
-          </div>
-          <h1 className="mt-6 max-w-xl text-5xl font-black leading-[1.05] tracking-tight">
-            One calm place to run your association.
+          <h1 className="max-w-xl text-5xl font-black leading-[1.15] tracking-tight">
+            Your smart gateway to modern community living.
           </h1>
-          <p className="mt-5 max-w-lg text-base leading-7 text-slate-300">
-            Keep residents informed, handle requests faster, and make every decision more transparent.
-          </p>
           <div className="mt-8 grid max-w-lg grid-cols-2 gap-3">
             {[
               'Resident communication',
