@@ -188,13 +188,15 @@ export default function Login() {
       <div className="pointer-events-none absolute -right-24 bottom-10 h-96 w-96 rounded-full bg-indigo-500/15 blur-3xl" />
       {/* Top Bar with Top Centre Powered by Logo */}
       <div className="relative z-10 w-full max-w-7xl mx-auto flex items-center justify-between py-2">
-        <div className="flex items-center gap-2.5 text-white">
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center font-black text-xl shadow-lg shadow-blue-500/20">
-            LA
-          </div>
+        <div className="flex items-center gap-3 text-white">
+          <img
+            src="/egates-logo.png"
+            alt="EGATES"
+            className="h-10 sm:h-12 w-auto object-contain rounded-xl bg-white/95 p-1 shadow-lg shadow-blue-500/10"
+          />
           <div>
-            <span className="font-bold text-base tracking-tight block leading-tight">
-              Layout Association
+            <span className="font-black text-lg sm:text-xl tracking-tight block leading-tight text-white">
+              EGATES
             </span>
             <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">
               Management Portal
@@ -473,7 +475,7 @@ export default function Login() {
 
       {/* Footer Copyright */}
       <footer className="text-center py-2 text-xs text-slate-500">
-        <p>&copy; {new Date().getFullYear()} Layout Association Management System. All rights reserved.</p>
+        <p>&copy; {new Date().getFullYear()} EGATES - Community & Layout Association Management. All rights reserved.</p>
       </footer>
     </div>
   );

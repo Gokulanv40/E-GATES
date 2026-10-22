@@ -194,7 +194,7 @@ export default function DigitalIdCardModal({
               {/* Association Name */}
               <div className="relative z-10 px-6">
                 <p className="text-[10px] tracking-widest uppercase font-extrabold text-amber-400">
-                  RESIDENTS WELFARE ASSOCIATION
+                  EGATES • RESIDENTS WELFARE ASSOCIATION
                 </p>
                 <h2 className="text-sm sm:text-base font-black tracking-tight mt-0.5 line-clamp-1 drop-shadow-sm">
                   {currentAssocName}

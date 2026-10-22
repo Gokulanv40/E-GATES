@@ -94,8 +94,8 @@ export default function Header({ onMenuToggle, associationName }) {
     associationName ||
     user?.association_name ||
     (user?.role === 'super_admin'
-      ? 'Master Super Admin Portal'
-      : 'Layout Resident Association');
+      ? 'EGATES Master Super Admin Portal'
+      : 'EGATES Community');
 
   const resolveFileUrl = (filePath) => {
     if (!filePath) return '';
@@ -135,13 +135,15 @@ export default function Header({ onMenuToggle, associationName }) {
           type="button"
           onClick={() => setShowIdCard(true)}
           title="Click to view Digital ID Card"
-          className="flex items-center gap-1.5 sm:gap-2 text-left hover:opacity-85 transition focus:outline-none cursor-pointer group"
+          className="flex items-center gap-2 text-left hover:opacity-85 transition focus:outline-none cursor-pointer group"
         >
-          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-primary-600 text-white flex items-center justify-center font-bold text-sm sm:text-lg shadow-sm flex-shrink-0 group-hover:bg-primary-500 transition">
-            LA
-          </div>
-          <span className="font-bold text-gray-900 dark:text-white hidden md:inline-block tracking-tight text-base group-hover:text-primary-600 dark:group-hover:text-primary-400 transition">
-            Association
+          <img
+            src="/egates-logo.png"
+            alt="EGATES"
+            className="h-8 sm:h-9 w-auto object-contain rounded-lg bg-white/95 p-0.5 shadow-xs group-hover:scale-105 transition"
+          />
+          <span className="font-black text-gray-900 dark:text-white hidden md:inline-block tracking-tight text-base group-hover:text-primary-600 dark:group-hover:text-primary-400 transition">
+            EGATES
           </span>
         </button>
       </div>

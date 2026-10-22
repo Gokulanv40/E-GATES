@@ -117,13 +117,15 @@ export default function Sidebar({ isOpen, onClose }) {
             title="Click to view Digital ID Card"
             className="flex items-center gap-3 text-left p-1.5 -ml-1.5 rounded-xl hover:bg-slate-800/80 transition focus:outline-none focus:ring-1 focus:ring-primary-500 cursor-pointer group"
           >
-            <div className="w-8 h-8 rounded-lg bg-primary-600 text-white font-bold flex items-center justify-center text-sm shadow-md group-hover:scale-105 group-hover:bg-primary-500 transition">
-              LA
-            </div>
+            <img
+              src="/egates-logo.png"
+              alt="EGATES"
+              className="h-9 w-auto max-w-[48px] object-contain rounded-xl bg-white/95 p-1 shadow-md group-hover:scale-105 transition"
+            />
             <div>
               <div className="flex items-center gap-1.5">
-                <h2 className="text-sm font-bold text-white tracking-tight group-hover:text-primary-300 transition">
-                  Association MS
+                <h2 className="text-sm font-black text-white tracking-tight group-hover:text-primary-300 transition">
+                  EGATES
                 </h2>
               </div>
               <span className="text-[10px] text-slate-400 capitalize block -mt-0.5 group-hover:text-slate-300">

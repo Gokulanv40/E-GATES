@@ -546,12 +546,14 @@ export default function Register() {
     <div className="min-h-screen bg-slate-900 flex flex-col justify-between p-4 sm:p-6 antialiased">
       {/* Top Header */}
       <div className="relative w-full max-w-5xl mx-auto flex items-center justify-between py-2">
-        <Link to="/" className="flex items-center gap-2 text-white">
-          <div className="w-9 h-9 rounded-xl bg-primary-600 flex items-center justify-center font-black text-lg shadow-lg">
-            LA
-          </div>
-          <span className="font-bold text-base tracking-tight hidden sm:inline">
-            Association Portal
+        <Link to="/" className="flex items-center gap-3 text-white">
+          <img
+            src="/egates-logo.png"
+            alt="EGATES"
+            className="h-9 sm:h-10 w-auto object-contain rounded-xl bg-white/95 p-1 shadow-md"
+          />
+          <span className="font-black text-lg tracking-tight hidden sm:inline text-white">
+            EGATES Portal
           </span>
         </Link>
 
@@ -1891,7 +1893,7 @@ export default function Register() {
       {/* Footer */}
       <footer className="text-center py-2 text-xs text-slate-500">
         <p>
-          &copy; {new Date().getFullYear()} Layout Association Management System. All
+          &copy; {new Date().getFullYear()} EGATES - Community & Layout Association Management. All
           rights reserved.
         </p>
       </footer>
