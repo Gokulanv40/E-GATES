@@ -46,8 +46,15 @@ app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 // Apply general rate limiting to API routes
 app.use('/api', generalLimiter);
 
-// Serve static uploads
-const uploadsPath = path.resolve(__dirname, '../uploads');
+// Serve static uploads / attachments
+const uploadsPath = config.attachmentsPath || path.resolve(__dirname, '../uploads');
+if (!fs.existsSync(uploadsPath)) {
+  try {
+    fs.mkdirSync(uploadsPath, { recursive: true });
+  } catch (err) {
+    console.warn('Could not auto-create uploads directory:', err.message);
+  }
+}
 app.use('/uploads', express.static(uploadsPath));
 
 // Health Check Endpoint

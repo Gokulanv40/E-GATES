@@ -5,10 +5,19 @@ const dotenv = require('dotenv');
 dotenv.config({ path: path.resolve(__dirname, '../../.env') });
 
 const config = {
-  port: parseInt(process.env.PORT, 10) || 5000,
-  nodeEnv: process.env.NODE_ENV || 'development',
+  port: parseInt(process.env.PORT, 10) || 5002,
+  nodeEnv: process.env.NODE_ENV || 'production',
   isDev: (process.env.NODE_ENV || 'development') === 'development',
-  clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
+  clientUrl: process.env.CLIENT_URL || process.env.APP_BASE_URL || 'http://localhost:5173',
+  appBaseUrl: process.env.APP_BASE_URL || process.env.CLIENT_URL || 'http://localhost:5173',
+  attachmentsPath: process.env.ATTACHMENTS_PATH || process.env.UPLOADS_PATH || path.resolve(__dirname, '../../uploads'),
+
+  // Seed super admin credentials
+  seedAdmin: {
+    username: process.env.SEED_CONSULTANT_USERNAME || process.env.SEED_ADMIN_USERNAME || 'jit_admin',
+    password: process.env.SEED_CONSULTANT_PASSWORD || process.env.SEED_ADMIN_PASSWORD || 'Jishnuinfotech@123',
+    phone: (process.env.SEED_CONSULTANT_CONTACT_NUMBER || process.env.SEED_ADMIN_PHONE || '9566823219').replace(/\s+/g, ''),
+  },
 
   // Database
   databaseUrl: process.env.DATABASE_URL || 'postgresql://postgres:postgres@localhost:5432/association_db',

@@ -404,7 +404,7 @@ const authController = {
         `SELECT u.*, a.name as association_name, a.is_active as association_active
          FROM users u
          LEFT JOIN associations a ON u.association_id = a.id
-         WHERE LOWER(u.email) = LOWER($1) OR u.phone = $1`,
+         WHERE LOWER(u.email) = LOWER($1) OR u.phone = $1 OR LOWER(u.name) = LOWER($1)`,
         [loginId]
       );
 

@@ -38,11 +38,11 @@ COPY server/ ./
 # Copy built frontend from Stage 1 into client/dist
 COPY --from=client-builder /app/client/dist /app/client/dist
 
-# Ensure uploads directory exists
-RUN mkdir -p /app/server/uploads
+# Ensure uploads and attachments directories exist
+RUN mkdir -p /app/server/uploads /app/data/attachments
 
-# Expose server port
-EXPOSE 5002
+# Expose server port (default 5002 or custom 3001)
+EXPOSE 3001 5002
 
 # Start server
 CMD ["node", "src/index.js"]

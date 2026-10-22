@@ -1,9 +1,73 @@
 const { Pool } = require('pg');
+const fs = require('fs');
+const path = require('path');
+const bcrypt = require('bcrypt');
 const config = require('./env');
 const { getEmbeddedDb, saveDb } = require('./embeddedDb');
 
 let useFallback = false;
 let loggedFallback = false;
+let pgInitialized = false;
+
+async function initPostgresSchemaAndSeed() {
+  if (pgInitialized) return;
+  pgInitialized = true;
+  try {
+    // 1. Check if users table exists in PostgreSQL
+    const checkRes = await pgPool.query(
+      "SELECT to_regclass('public.users') as exists"
+    );
+    if (!checkRes.rows[0]?.exists) {
+      console.log('[PostgreSQL]: Initializing database schema from schema.sql...');
+      const schemaPath = path.resolve(__dirname, '../schema.sql');
+      if (fs.existsSync(schemaPath)) {
+        const schemaSql = fs.readFileSync(schemaPath, 'utf8');
+        await pgPool.query(schemaSql);
+        console.log('[PostgreSQL]: Database schema successfully initialized.');
+      }
+    }
+
+    // 2. Ensure Super Admin exists matching seedAdmin configuration
+    const seedUsername = config.seedAdmin?.username || 'jit_admin';
+    const seedPassword = config.seedAdmin?.password || 'Jishnuinfotech@123';
+    const seedPhone = config.seedAdmin?.phone || '9566823219';
+    const seedEmail = seedUsername.includes('@')
+      ? seedUsername.toLowerCase()
+      : `${seedUsername.toLowerCase()}@jishnuinfotech.com`;
+
+    const saCheck = await pgPool.query(
+      "SELECT id, email, name FROM users WHERE role = 'super_admin' LIMIT 1"
+    );
+
+    const salt = await bcrypt.genSalt(10);
+    const hash = await bcrypt.hash(seedPassword, salt);
+
+    if (saCheck.rows.length === 0) {
+      console.log(`[PostgreSQL]: Seeding Super Admin account (${seedUsername} / ${seedEmail})...`);
+      await pgPool.query(
+        `INSERT INTO users (name, email, phone, password_hash, role, status, member_code)
+         VALUES ($1, $2, $3, $4, 'super_admin', 'approved', '000001')
+         ON CONFLICT (email) DO UPDATE
+         SET password_hash = EXCLUDED.password_hash,
+             name = EXCLUDED.name,
+             phone = EXCLUDED.phone,
+             status = 'approved'`,
+        [seedUsername, seedEmail, seedPhone, hash]
+      );
+      console.log('[PostgreSQL]: Super Admin created successfully.');
+    } else {
+      const existing = saCheck.rows[0];
+      await pgPool.query(
+        `UPDATE users
+         SET password_hash = $1, name = $2, phone = $3
+         WHERE id = $4`,
+        [hash, seedUsername, seedPhone, existing.id]
+      );
+    }
+  } catch (err) {
+    console.warn('[PostgreSQL Auto-Init Notice]:', err.message);
+  }
+}
 
 const pgPool = new Pool({
   connectionString: config.databaseUrl,
@@ -18,6 +82,7 @@ const pgPool = new Pool({
 pgPool.on('connect', () => {
   useFallback = false;
   loggedFallback = false;
+  initPostgresSchemaAndSeed().catch(() => {});
 });
 
 pgPool.on('error', (err) => {
@@ -128,6 +193,9 @@ async function executeEmbeddedQuery(sql, params = []) {
 const db = {
   async query(text, params) {
     if (!useFallback) {
+      if (!pgInitialized) {
+        await initPostgresSchemaAndSeed().catch(() => {});
+      }
       try {
         return await pgPool.query(text, params);
       } catch (err) {

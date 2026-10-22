@@ -2,8 +2,9 @@ const multer = require('multer');
 const path = require('path');
 const fs = require('fs');
 const { v4: uuidv4 } = require('uuid');
+const config = require('./env');
 
-const UPLOADS_BASE = path.resolve(__dirname, '../../uploads');
+const UPLOADS_BASE = config.attachmentsPath || path.resolve(__dirname, '../../uploads');
 
 // Ensure upload subdirectories exist
 const subdirs = ['proofs', 'news', 'voting', 'documents', 'logos', 'audio', 'profiles', 'events'];
