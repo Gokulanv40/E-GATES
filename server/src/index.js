@@ -1,5 +1,6 @@
 const http = require('http');
 const path = require('path');
+const fs = require('fs');
 const express = require('express');
 const helmet = require('helmet');
 const cors = require('cors');
@@ -99,7 +100,6 @@ app.use('/api/*', (req, res) => {
 });
 
 // Serve frontend build if available (production / Docker)
-const fs = require('fs');
 const clientBuildPath = path.resolve(__dirname, '../../client/dist');
 if (fs.existsSync(clientBuildPath)) {
   app.use(express.static(clientBuildPath));
