@@ -5,13 +5,8 @@ import { useAuth } from '../hooks/useAuth';
 export const SocketContext = createContext(null);
 
 const getSocketUrl = () => {
-  if (
-    typeof window !== 'undefined' &&
-    window.location?.hostname &&
-    window.location.hostname !== 'localhost' &&
-    window.location.hostname !== '127.0.0.1'
-  ) {
-    return `http://${window.location.hostname}:5002`;
+  if (typeof window !== 'undefined' && window.location?.origin) {
+    return window.location.origin;
   }
   return import.meta.env.VITE_SOCKET_URL || 'http://localhost:5002';
 };

@@ -1,13 +1,8 @@
 import axios from 'axios';
 
 const getApiBaseUrl = () => {
-  if (
-    typeof window !== 'undefined' &&
-    window.location?.hostname &&
-    window.location.hostname !== 'localhost' &&
-    window.location.hostname !== '127.0.0.1'
-  ) {
-    return `http://${window.location.hostname}:5002/api/v1`;
+  if (typeof window !== 'undefined') {
+    return '/api/v1';
   }
   return import.meta.env.VITE_API_URL || 'http://localhost:5002/api/v1';
 };
@@ -19,7 +14,7 @@ const api = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
-  timeout: 30000,
+  timeout: 15000,
 });
 
 // Request Interceptor: Attach JWT Access Token
@@ -62,7 +57,16 @@ api.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // If no response (network error / server down)
+    // If no response (network error / server down), try direct backend port fallback
+    if (!error.response && originalRequest && !originalRequest._fallbackTried) {
+      originalRequest._fallbackTried = true;
+      const directBase = 'http://localhost:5002/api/v1';
+      if (originalRequest.baseURL !== directBase) {
+        originalRequest.baseURL = directBase;
+        return api(originalRequest);
+      }
+    }
+
     if (!error.response) {
       return Promise.reject(
         new Error(error.message || 'Network error occurred. Please check your connection.')
