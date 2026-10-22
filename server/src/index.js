@@ -147,16 +147,18 @@ async function startServer() {
     console.log(`=======================================================`);
   });
 
-  // Dual-Port support: Also listen on port 3000 if PORT is 3001 so default Easypanel route works
-  const secondaryPort = PORT === 3000 ? 3001 : 3000;
-  try {
-    const secondaryServer = http.createServer(app);
-    secondaryServer.listen(secondaryPort, '0.0.0.0', () => {
-      console.log(`  [Dual-Port]: Also listening on http://0.0.0.0:${secondaryPort}`);
-    }).on('error', () => {
-      // Safely ignore if port is occupied
-    });
-  } catch (_) {}
+  // Multi-Port support: Also listen on common Easypanel ports so Traefik never fails
+  const fallbackPorts = [3000, 3001, 5000, 5002, 8080].filter((p) => p !== PORT);
+  fallbackPorts.forEach((p) => {
+    try {
+      const s = http.createServer(app);
+      s.listen(p, '0.0.0.0', () => {
+        console.log(`  [Multi-Port]: Also listening on http://0.0.0.0:${p}`);
+      }).on('error', () => {
+        // Port already in use or unavailable, safe to ignore
+      });
+    } catch (_) {}
+  });
 }
 
 startServer();
