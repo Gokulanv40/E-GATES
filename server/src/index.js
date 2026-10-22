@@ -99,25 +99,50 @@ app.use('/api/*', (req, res) => {
   });
 });
 
+// Universal Health Check endpoints (for Easypanel, Traefik, Docker Swarm, Kubernetes)
+app.get(['/health', '/healthz', '/ping', '/api/health'], (req, res) => {
+  res.status(200).json({
+    status: 'healthy',
+    timestamp: new Date().toISOString(),
+    service: 'EGATES Platform',
+    port: config.port,
+    footer: 'Powered by JishnuInfotech',
+  });
+});
+
 // Serve frontend build if available (production / Docker)
-const clientBuildPath = path.resolve(__dirname, '../../client/dist');
-if (fs.existsSync(clientBuildPath)) {
-  app.use(express.static(clientBuildPath));
+const possibleClientPaths = [
+  path.resolve(__dirname, '../../client/dist'),
+  path.resolve(__dirname, '../../../client/dist'),
+  path.resolve(__dirname, '../client/dist'),
+  '/app/client/dist',
+];
+const resolvedClientPath = possibleClientPaths.find((p) => fs.existsSync(path.join(p, 'index.html'))) || possibleClientPaths[0];
+
+if (fs.existsSync(resolvedClientPath)) {
+  app.use(express.static(resolvedClientPath));
   app.get('*', (req, res, next) => {
     if (
       req.path.startsWith('/api') ||
       req.path.startsWith('/uploads') ||
-      req.path.startsWith('/health')
+      req.path.startsWith('/health') ||
+      req.path === '/ping' ||
+      req.path === '/healthz'
     ) {
       return next();
     }
-    const indexHtml = path.join(clientBuildPath, 'index.html');
+    const indexHtml = path.join(resolvedClientPath, 'index.html');
     if (fs.existsSync(indexHtml)) {
       return res.sendFile(indexHtml);
     }
     next();
   });
 }
+
+// Fallback root for container health checks if client build is still mounting
+app.get('/', (req, res) => {
+  res.status(200).send('EGATES Backend is live. API available at /api/v1');
+});
 
 // Central Error Handling Middleware (must be registered last)
 app.use(errorHandler);
@@ -138,18 +163,29 @@ async function startServer() {
   // Initialize scheduled background jobs
   initCronJobs();
 
-  // Start Listening
-  const PORT = config.port;
-  server.listen(PORT, () => {
+  // Start Listening on primary port
+  const PORT = config.port || 3001;
+  server.listen(PORT, '0.0.0.0', () => {
     console.log(`=======================================================`);
     console.log(`  Layout Association Management Backend Server`);
-    console.log(`  Listening on port: ${PORT}`);
-    console.log(`  API Base URL:      http://localhost:${PORT}/api/v1`);
-    console.log(`  Uploads:           http://localhost:${PORT}/uploads/`);
+    console.log(`  Listening on:      http://0.0.0.0:${PORT}`);
+    console.log(`  API Base URL:      http://0.0.0.0:${PORT}/api/v1`);
+    console.log(`  Uploads:           http://0.0.0.0:${PORT}/uploads/`);
     console.log(`  Environment:       ${config.nodeEnv}`);
     console.log(`  Powered by JishnuInfotech`);
     console.log(`=======================================================`);
   });
+
+  // Dual-Port support: Also listen on port 3000 if PORT is 3001 so default Easypanel route works
+  const secondaryPort = PORT === 3000 ? 3001 : 3000;
+  try {
+    const secondaryServer = http.createServer(app);
+    secondaryServer.listen(secondaryPort, '0.0.0.0', () => {
+      console.log(`  [Dual-Port]: Also listening on http://0.0.0.0:${secondaryPort}`);
+    }).on('error', () => {
+      // Safely ignore if port is occupied
+    });
+  } catch (_) {}
 }
 
 startServer();
