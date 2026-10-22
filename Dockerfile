@@ -41,8 +41,12 @@ COPY --from=client-builder /app/client/dist /app/client/dist
 # Ensure uploads and attachments directories exist
 RUN mkdir -p /app/server/uploads /app/data/attachments
 
-# Expose server port (default 5002 or custom 3001)
-EXPOSE 3001 5002
+# Expose supported server ports
+EXPOSE 3000 3001 5002
+
+# Internal healthcheck to keep container active and report status to Easypanel / Docker Swarm
+HEALTHCHECK --interval=20s --timeout=5s --start-period=20s --retries=3 \
+  CMD wget -qO- http://127.0.0.1:3001/health || wget -qO- http://127.0.0.1:3000/health || exit 1
 
 # Start server
 CMD ["node", "src/index.js"]
