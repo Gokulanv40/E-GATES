@@ -110,27 +110,22 @@ export default function Sidebar({ isOpen, onClose }) {
         }`}
       >
         {/* Top Header */}
-        <div className="h-16 px-5 border-b border-slate-800 flex items-center justify-between">
+        <div className="h-16 px-4 border-b border-slate-800 flex items-center justify-between">
           <button
             type="button"
             onClick={() => setShowIdCard(true)}
             title="Click to view Digital ID Card"
-            className="flex items-center gap-3 text-left p-1.5 -ml-1.5 rounded-xl hover:bg-slate-800/80 transition focus:outline-none focus:ring-1 focus:ring-primary-500 cursor-pointer group"
+            className="flex items-center gap-2.5 text-left p-1 rounded-xl hover:bg-slate-800/80 transition focus:outline-none focus:ring-1 focus:ring-primary-500 cursor-pointer group flex-1 min-w-0"
           >
             <img
               src="/egates-logo.png"
               alt="EGATES"
-              className="h-9 w-auto max-w-[48px] object-contain rounded-xl bg-white/95 p-1 shadow-md group-hover:scale-105 transition"
+              className="h-9 w-auto max-w-[130px] object-contain rounded-xl bg-white/95 p-1 shadow-md group-hover:scale-105 transition flex-shrink-0"
             />
-            <div>
-              <div className="flex items-center gap-1.5">
-                <h2 className="text-sm font-black text-white tracking-tight group-hover:text-primary-300 transition">
-                  EGATES
-                </h2>
-              </div>
-              <span className="text-[10px] text-slate-400 capitalize block -mt-0.5 group-hover:text-slate-300">
+            <div className="min-w-0 flex-1">
+              <span className="text-[10px] text-slate-300 font-bold capitalize block truncate">
                 {user?.is_main_admin
-                  ? 'Main Association Admin'
+                  ? 'Main Admin'
                   : (user?.role === 'admin'
                     ? 'Layout Admin'
                     : (user?.role?.replace('_', ' ') || 'Community'))}

@@ -135,22 +135,19 @@ export default function Header({ onMenuToggle, associationName }) {
           type="button"
           onClick={() => setShowIdCard(true)}
           title="Click to view Digital ID Card"
-          className="flex items-center gap-2 text-left hover:opacity-85 transition focus:outline-none cursor-pointer group"
+          className="flex items-center hover:opacity-90 transition focus:outline-none cursor-pointer group py-0.5"
         >
           <img
             src="/egates-logo.png"
             alt="EGATES"
-            className="h-8 sm:h-9 w-auto object-contain rounded-lg bg-white/95 p-0.5 shadow-xs group-hover:scale-105 transition"
+            className="h-9 sm:h-11 w-auto max-w-[160px] sm:max-w-[195px] object-contain rounded-xl bg-white/95 p-1 shadow-xs group-hover:scale-105 transition"
           />
-          <span className="font-black text-gray-900 dark:text-white hidden md:inline-block tracking-tight text-base group-hover:text-primary-600 dark:group-hover:text-primary-400 transition">
-            EGATES
-          </span>
         </button>
       </div>
 
       {/* Top Center: Powered by Logo & Association Name */}
       <div className="flex-1 min-w-0 flex flex-col items-center justify-center px-1.5 sm:px-3 mx-auto">
-        <PoweredByLogo size="sm" className="hidden sm:inline-flex mb-0.5 sm:mb-1" />
+        <PoweredByLogo size="md" className="hidden sm:inline-flex mb-1" />
         <h1
           className="text-xs sm:text-sm font-extrabold text-gray-800 dark:text-gray-100 truncate text-center max-w-full"
           title={displayedTitle}

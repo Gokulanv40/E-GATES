@@ -546,15 +546,12 @@ export default function Register() {
     <div className="min-h-screen bg-slate-900 flex flex-col justify-between p-4 sm:p-6 antialiased">
       {/* Top Header */}
       <div className="relative w-full max-w-5xl mx-auto flex items-center justify-between py-2">
-        <Link to="/" className="flex items-center gap-3 text-white">
+        <Link to="/" className="flex items-center">
           <img
             src="/egates-logo.png"
             alt="EGATES"
-            className="h-9 sm:h-10 w-auto object-contain rounded-xl bg-white/95 p-1 shadow-md"
+            className="h-10 sm:h-12 w-auto max-w-[170px] sm:max-w-[200px] object-contain rounded-2xl bg-white/95 p-1.5 shadow-md"
           />
-          <span className="font-black text-lg tracking-tight hidden sm:inline text-white">
-            EGATES Portal
-          </span>
         </Link>
 
         {/* Top Centre with Logo */}

@@ -187,20 +187,12 @@ export default function Login() {
       <div className="pointer-events-none absolute -right-24 bottom-10 h-96 w-96 rounded-full bg-indigo-500/15 blur-3xl" />
       {/* Top Bar with Top Centre Powered by Logo */}
       <div className="relative z-10 w-full max-w-7xl mx-auto flex items-center justify-between py-2">
-        <div className="flex items-center gap-3 text-white">
+        <div className="flex items-center">
           <img
             src="/egates-logo.png"
             alt="EGATES"
-            className="h-10 sm:h-12 w-auto object-contain rounded-xl bg-white/95 p-1 shadow-lg shadow-blue-500/10"
+            className="h-11 sm:h-14 w-auto max-w-[190px] sm:max-w-[220px] object-contain rounded-2xl bg-white/95 p-1.5 shadow-xl shadow-blue-500/10"
           />
-          <div>
-            <span className="font-black text-lg sm:text-xl tracking-tight block leading-tight text-white">
-              EGATES
-            </span>
-            <span className="text-[10px] text-slate-400 font-semibold uppercase tracking-wider block">
-              Management Portal
-            </span>
-          </div>
         </div>
 
         {/* Top Centre Powered By Logo */}
