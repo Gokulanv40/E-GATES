@@ -17,6 +17,7 @@ async function closeExpiredPolls() {
       console.log(`[Cron: Polls] Successfully closed ${result.rowCount} expired poll(s).`);
     }
   } catch (err) {
+    if (err.message && err.message.includes('does not exist')) return;
     console.error('[Cron Error: Expired Polls]:', err.message);
   }
 }
@@ -37,6 +38,7 @@ async function markOverdueMaintenanceFees() {
       console.log(`[Cron: Maintenance] Marked ${result.rowCount} maintenance fee record(s) as overdue.`);
     }
   } catch (err) {
+    if (err.message && err.message.includes('does not exist')) return;
     console.error('[Cron Error: Overdue Maintenance]:', err.message);
   }
 }

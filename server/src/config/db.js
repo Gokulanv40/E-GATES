@@ -258,6 +258,8 @@ const db = {
       // ignore
     }
   },
+
+  initPostgresSchemaAndSeed,
 };
 
 module.exports = db;

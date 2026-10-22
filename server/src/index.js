@@ -126,21 +126,33 @@ app.use(errorHandler);
 const server = http.createServer(app);
 initSocket(server);
 
-// Initialize scheduled background jobs
-initCronJobs();
+// Bootstrapping function
+async function startServer() {
+  // Pre-initialize database schema and seed if using PostgreSQL
+  if (pool.initPostgresSchemaAndSeed) {
+    await pool.initPostgresSchemaAndSeed().catch((err) => {
+      console.warn('[Database Boot Notice]:', err.message);
+    });
+  }
 
-// Start Listening
-const PORT = config.port;
-server.listen(PORT, () => {
-  console.log(`=======================================================`);
-  console.log(`  Layout Association Management Backend Server`);
-  console.log(`  Listening on port: ${PORT}`);
-  console.log(`  API Base URL:      http://localhost:${PORT}/api/v1`);
-  console.log(`  Uploads:           http://localhost:${PORT}/uploads/`);
-  console.log(`  Environment:       ${config.nodeEnv}`);
-  console.log(`  Powered by JishnuInfotech`);
-  console.log(`=======================================================`);
-});
+  // Initialize scheduled background jobs
+  initCronJobs();
+
+  // Start Listening
+  const PORT = config.port;
+  server.listen(PORT, () => {
+    console.log(`=======================================================`);
+    console.log(`  Layout Association Management Backend Server`);
+    console.log(`  Listening on port: ${PORT}`);
+    console.log(`  API Base URL:      http://localhost:${PORT}/api/v1`);
+    console.log(`  Uploads:           http://localhost:${PORT}/uploads/`);
+    console.log(`  Environment:       ${config.nodeEnv}`);
+    console.log(`  Powered by JishnuInfotech`);
+    console.log(`=======================================================`);
+  });
+}
+
+startServer();
 
 // Graceful Shutdown Handling
 const handleShutdown = async (signal) => {
